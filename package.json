@@ -1,0 +1,50 @@
+{
+  "name": "alumni_backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "type": "module",
+  "bin": {
+    "express-cli": "./bin/cli.js"
+  },
+  "scripts": {
+    "start": "NODE_ENV=production node src/main.js",
+    "dev": "nodemon src/main.js",
+    "dev:local": "nodemon --env-file=.env.local src/main.js",
+    "dev:prod": "nodemon --env-file=.env.production src/main.js",
+    "test:prod-local": "node test-prod-local.js",
+    "debug:env": "node -e \"console.log(process.env)\"",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "commander": "^12.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "eslint": "9.x",
+    "express": "^4.19.2",
+    "express-session": "^1.18.1",
+    "fs-extra": "^11.2.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.7.0",
+    "passport": "^0.7.0",
+    "passport-facebook": "^3.0.0",
+    "passport-google-oauth20": "^2.0.0",
+    "pg": "^8.16.3",
+    "reflect-metadata": "^0.1.14",
+    "typeorm": "^0.3.25",
+    "winston": "^3.13.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.4.0",
+    "@types/node": "^20.19.4",
+    "@types/pg": "^8.15.4",
+    "globals": "^15.4.0",
+    "nodemon": "^2.0.15",
+    "typescript": "^5.0.0"
+  }
+}
