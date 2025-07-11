@@ -8,7 +8,7 @@
     "express-cli": "./bin/cli.js"
   },
   "scripts": {
-    "start": "NODE_ENV=production node src/main.js",
+    "start": "node src/main.js",
     "dev": "nodemon src/main.js",
     "dev:local": "nodemon --env-file=.env.local src/main.js",
     "dev:prod": "nodemon --env-file=.env.production src/main.js",

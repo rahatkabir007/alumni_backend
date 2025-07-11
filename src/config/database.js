@@ -1,11 +1,9 @@
 import 'reflect-metadata';
-import { config } from 'dotenv';
 import { DataSource } from 'typeorm';
 import { Client } from 'pg';
 import { User } from '../entities/User.js';
 
-// Load environment config - Fix this part
-config(); // This will load .env by default
+// Environment variables are loaded in main.js
 
 let dataSource;
 
@@ -46,7 +44,10 @@ const connectDB = async () => {
             hasJWT_SECRET: !!process.env.JWT_SECRET,
             hasDATABASE_URL: !!process.env.DATABASE_URL,
             hasPOSTGRES_URL: !!process.env.POSTGRES_URL,
-            hasDB_HOST: !!process.env.DB_HOST
+            hasDB_HOST: !!process.env.DB_HOST,
+            DB_PASSWORD_TYPE: typeof process.env.DB_PASSWORD,
+            DB_PASSWORD_LENGTH: process.env.DB_PASSWORD?.length,
+            DB_PASSWORD_VALUE: process.env.DB_PASSWORD // Remove this in production
         });
 
         // Create database if in development
