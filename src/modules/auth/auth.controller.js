@@ -9,7 +9,7 @@ class AuthController {
 
     registerRoutes(app) {
         // Email/Password Authentication Routes
-        app.post('/register', async (req, res) => {
+        app.post('/auth/register', async (req, res) => {
             try {
                 const result = await this.authService.registerUser(req.body);
                 res.status(201).json({ success: true, data: result });
@@ -23,7 +23,7 @@ class AuthController {
             }
         });
 
-        app.post('/login', async (req, res) => {
+        app.post('/auth/login', async (req, res) => {
             try {
                 const result = await this.authService.loginUser(req.body);
                 res.json({ success: true, data: result });
