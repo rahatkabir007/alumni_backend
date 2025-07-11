@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
 import { Client } from 'pg';
-import { User } from '../entities/User.js';
+import { loadEntities } from '../utils/entityLoader.js';
 
 // Environment variables are loaded in main.js
 
@@ -46,9 +46,16 @@ const connectDB = async () => {
             hasPOSTGRES_URL: !!process.env.POSTGRES_URL,
             hasDB_HOST: !!process.env.DB_HOST,
             DB_PASSWORD_TYPE: typeof process.env.DB_PASSWORD,
-            DB_PASSWORD_LENGTH: process.env.DB_PASSWORD?.length,
-            DB_PASSWORD_VALUE: process.env.DB_PASSWORD // Remove this in production
+            DB_PASSWORD_LENGTH: process.env.DB_PASSWORD?.length
         });
+
+        // Dynamically load all entities
+        console.log('🔄 Loading entities...');
+        const entities = await loadEntities();
+
+        if (entities.length === 0) {
+            console.warn('⚠ No entities found! Database will be created without tables.');
+        }
 
         // Create database if in development
         await createDatabaseIfNotExists();
@@ -69,7 +76,7 @@ const connectDB = async () => {
             connectionConfig = {
                 type: 'postgres',
                 url: dbUrl,
-                entities: [User],
+                entities: entities, // Dynamic entities
                 synchronize: true, // Enable to create tables in production (first time)
                 logging: false,
                 ssl: { rejectUnauthorized: false },
@@ -88,7 +95,7 @@ const connectDB = async () => {
                 username: process.env.DB_USER,
                 password: process.env.DB_PASSWORD,
                 database: process.env.DB_NAME,
-                entities: [User],
+                entities: entities, // Dynamic entities
                 synchronize: true, // Auto-sync in development
                 logging: false,
                 ssl: false
