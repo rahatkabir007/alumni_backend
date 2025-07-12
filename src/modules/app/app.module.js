@@ -64,17 +64,23 @@ const AppModule = async (app) => {
     app.use(passport.initialize());
     app.use(passport.session());
 
+    // Root level routes (non-API)
     const appService = new AppService();
     const appController = new AppController(appService);
-
     appController.registerRoutes(app);
 
-    // Initialize modules
-    await AuthModule(app); // Add OAuth routes
-    await UsersModule(app);
+    // Create API router
+    const apiRouter = express.Router();
+
+    // Initialize modules on API router
+    await AuthModule(apiRouter); // Add OAuth routes
+    await UsersModule(apiRouter);
 
     // Apply auth middleware after OAuth routes
-    app.use(authMiddleware);
+    apiRouter.use(authMiddleware);
+
+    // Mount API router under /api prefix
+    app.use('/api', apiRouter);
 
     app.use(errorMiddleware);
 };
