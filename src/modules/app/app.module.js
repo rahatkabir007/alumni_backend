@@ -24,32 +24,38 @@ const AppModule = async (app) => {
     // Configure Passport after database connection
     configurePassport();
 
-    // Improved CORS configuration for production
-    // const corsOptions = {
-    //     origin: function (origin, callback) {
-    //         // Allow requests with no origin (like mobile apps or curl requests)
-    //         if (!origin) return callback(null, true);
+    // In app.module.js, replace app.use(cors()) with:
+    const corsOptions = {
+        origin: function (origin, callback) {
+            console.log('Request Origin:', origin); // Debug log
 
-    //         const allowedOrigins = [
-    //             process.env.FRONTEND_URL,
-    //             'http://localhost:3000',
-    //             'http://localhost:3001'
-    //         ].filter(Boolean); // Remove any undefined values
+            // Allow requests with no origin (like mobile apps or curl requests)
+            if (!origin) return callback(null, true);
 
-    //         if (allowedOrigins.indexOf(origin) !== -1) {
-    //             callback(null, true);
-    //         } else {
-    //             console.log('CORS blocked origin:', origin);
-    //             callback(new Error('Not allowed by CORS'));
-    //         }
-    //     },
-    //     credentials: true,
-    //     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    //     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    //     exposedHeaders: ['Authorization']
-    // };
+            const allowedOrigins = [
+                process.env.FRONTEND_URL,
+                'http://localhost:3000',
+                'http://localhost:5173',
+                'https://cisc-alumni-frontend.vercel.app',
+                'https://cihs-alumni.netlify.app',
+                'https://localhost:3000', // Add HTTPS versions
+                'https://localhost:5173'
+            ].filter(Boolean);
 
-    app.use(cors());
+            if (allowedOrigins.some(allowedOrigin => allowedOrigin === origin)) {
+                callback(null, true);
+            } else {
+                console.log('CORS blocked origin:', origin);
+                callback(new Error('Not allowed by CORS'));
+            }
+        },
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+        exposedHeaders: ['Authorization']
+    };
+
+    app.use(cors(corsOptions));
     app.use(express.json());
 
     // Session middleware for passport
