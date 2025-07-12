@@ -38,7 +38,7 @@ const AppModule = async (app) => {
                 'http://localhost:5173',
                 'https://cisc-alumni-frontend.vercel.app',
                 'https://cihs-alumni.netlify.app',
-                'https://localhost:3000', // Add HTTPS versions
+                'https://localhost:3000',
                 'https://localhost:5173'
             ].filter(Boolean);
 
