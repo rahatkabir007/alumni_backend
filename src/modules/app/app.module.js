@@ -39,12 +39,13 @@ const AppModule = async (app) => {
                 'https://cisc-alumni-frontend.vercel.app',
                 'https://cihs-alumni.netlify.app',
                 'https://localhost:3000',
-                'https://localhost:5173'
+                'https://localhost:5173',
             ].filter(Boolean);
 
             if (allowedOrigins.some(allowedOrigin => allowedOrigin === origin)) {
                 callback(null, true);
-            } else {
+            }
+            else {
                 console.log('CORS blocked origin:', origin);
                 callback(new Error('Not allowed by CORS'));
             }
