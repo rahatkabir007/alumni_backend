@@ -1,4 +1,3 @@
-// filepath: f:\alumni\alumni_backend\src\entities\User.js
 import { EntitySchema } from 'typeorm';
 
 export const User = new EntitySchema({
@@ -24,6 +23,11 @@ export const User = new EntitySchema({
             type: 'varchar',
             length: 255,
             nullable: true,
+        },
+        roles: {
+            type: 'json', // Store as JSON array
+            default: () => "ARRAY['user']", // Default role as array
+            nullable: false,
         },
         googleId: {
             type: 'varchar',

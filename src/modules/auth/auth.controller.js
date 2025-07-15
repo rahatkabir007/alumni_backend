@@ -1,6 +1,7 @@
 import passport from 'passport';
 import { generateToken } from '../../utils/jwtSign.js';
 import { AuthService } from './auth.service.js';
+import { requireAdmin, roleMiddleware } from '../../middlewares/role.middleware.js';
 
 class AuthController {
     constructor() {
@@ -54,7 +55,8 @@ class AuthController {
                         id: req.user.id,
                         email: req.user.email,
                         name: req.user.name,
-                        provider: req.user.provider
+                        provider: req.user.provider,
+                        roles: req.user.roles || ['user']
                     }))}`);
                 } catch (error) {
                     console.error('Google callback error:', error);
@@ -80,7 +82,8 @@ class AuthController {
                         id: req.user.id,
                         email: req.user.email,
                         name: req.user.name,
-                        provider: req.user.provider
+                        provider: req.user.provider,
+                        roles: req.user.roles || ['user']
                     }))}`);
                 } catch (error) {
                     console.error('Facebook callback error:', error);
@@ -99,7 +102,8 @@ class AuthController {
                             id: req.user.id,
                             email: req.user.email,
                             name: req.user.name,
-                            provider: req.user.provider
+                            provider: req.user.provider,
+                            roles: req.user.roles || ['user']
                         }
                     });
                 } else {
@@ -138,13 +142,88 @@ class AuthController {
             }
         });
 
+        // Role management routes (Admin only)
+        app.put('/auth/users/:userId/roles', requireAdmin, async (req, res) => {
+            try {
+                const { userId } = req.params;
+                const { roles } = req.body;
+
+                if (!Array.isArray(roles) || roles.length === 0) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Roles must be a non-empty array'
+                    });
+                }
+
+                const validRoles = ['user', 'moderator', 'admin'];
+                const invalidRoles = roles.filter(role => !validRoles.includes(role));
+
+                if (invalidRoles.length > 0) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Invalid roles: ${invalidRoles.join(', ')}. Valid roles: ${validRoles.join(', ')}`
+                    });
+                }
+
+                const updatedUser = await this.authService.updateUserRoles(parseInt(userId), roles);
+                res.json({ success: true, data: updatedUser });
+            } catch (error) {
+                console.error('Update user roles error:', error);
+                res.status(500).json({
+                    success: false,
+                    error: 'Failed to update user roles',
+                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+                });
+            }
+        });
+
+        app.post('/auth/users/:userId/roles/:role', requireAdmin, async (req, res) => {
+            try {
+                const { userId, role } = req.params;
+
+                const validRoles = ['user', 'moderator', 'admin'];
+                if (!validRoles.includes(role)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Invalid role: ${role}. Valid roles: ${validRoles.join(', ')}`
+                    });
+                }
+
+                const updatedUser = await this.authService.addRoleToUser(parseInt(userId), role);
+                res.json({ success: true, data: updatedUser });
+            } catch (error) {
+                console.error('Add role to user error:', error);
+                res.status(500).json({
+                    success: false,
+                    error: 'Failed to add role to user',
+                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+                });
+            }
+        });
+
+        app.delete('/auth/users/:userId/roles/:role', requireAdmin, async (req, res) => {
+            try {
+                const { userId, role } = req.params;
+
+                const updatedUser = await this.authService.removeRoleFromUser(parseInt(userId), role);
+                res.json({ success: true, data: updatedUser });
+            } catch (error) {
+                console.error('Remove role from user error:', error);
+                res.status(500).json({
+                    success: false,
+                    error: 'Failed to remove role from user',
+                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+                });
+            }
+        });
+
         // Logout endpoint
         app.post('/auth/logout', (req, res) => {
-            req.logout((err) => {
-                if (err) {
-                    return res.status(500).json({ success: false, message: 'Logout failed' });
-                }
-                res.json({ success: true, message: 'Logged out successfully' });
+            // For JWT-based auth, logout is primarily handled client-side
+            res.json({
+                success: true,
+                message: 'Logged out successfully. Token should be removed from client storage.',
+                timestamp: new Date().toISOString()
             });
         });
     }
