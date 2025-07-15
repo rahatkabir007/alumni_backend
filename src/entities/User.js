@@ -17,7 +17,7 @@ export const User = new EntitySchema({
         password: {
             type: 'varchar',
             length: 255,
-            nullable: true, // Make nullable for OAuth users
+            nullable: true,
         },
         name: {
             type: 'varchar',
@@ -25,8 +25,8 @@ export const User = new EntitySchema({
             nullable: true,
         },
         roles: {
-            type: 'json', // Store as JSON array
-            default: () => "ARRAY['user']", // Default role as array
+            type: 'json',
+            default: () => "'[\"user\"]'",
             nullable: false,
         },
         googleId: {
@@ -42,7 +42,7 @@ export const User = new EntitySchema({
         provider: {
             type: 'varchar',
             length: 50,
-            default: 'email', // 'email', 'google', 'facebook'
+            default: 'email',
         },
         created_at: {
             type: 'timestamp',
