@@ -24,6 +24,12 @@ export const User = new EntitySchema({
             length: 255,
             nullable: true,
         },
+        profilePhoto: {
+            type: 'varchar',
+            length: 500,
+            default: '',
+            nullable: false,
+        },
         roles: {
             type: 'json',
             default: () => "'[\"user\"]'",

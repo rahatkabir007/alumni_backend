@@ -24,6 +24,10 @@ class AuthService {
             });
 
             if (existingUser) {
+                // Check if user exists with a different provider
+                if (existingUser.provider !== 'email') {
+                    throw new Error(`An account with this email already exists. Please sign in with ${existingUser.provider === 'google' ? 'Google' : existingUser.provider === 'facebook' ? 'Facebook' : existingUser.provider}.`);
+                }
                 throw new Error('User already exists with this email');
             }
 
@@ -33,18 +37,21 @@ class AuthService {
                 email: userData.email,
                 password: hashedPassword,
                 name: userData.name,
+                profilePhoto: userData.profilePhoto || '',
                 roles: ['user'], // Default role as array
                 provider: 'email'
             });
 
             const savedUser = await this.userRepository.save(user);
-            const { password, ...userWithoutPassword } = savedUser;
 
             // Generate token for immediate login after registration
             const token = generateToken(savedUser.email);
 
-            console.log('User registered successfully:', userWithoutPassword.email);
-            return { user: userWithoutPassword, token };
+            console.log('User registered successfully:', savedUser.email);
+            return {
+                user: { id: savedUser.id }, // Only return user ID
+                token
+            };
         } catch (error) {
             console.error('Registration error in service:', error);
             throw error;
@@ -61,6 +68,11 @@ class AuthService {
                 throw new Error('Invalid credentials');
             }
 
+            // Check if user was registered with OAuth provider
+            if (user.provider !== 'email') {
+                throw new Error(`This email is associated with ${user.provider === 'google' ? 'Google' : user.provider === 'facebook' ? 'Facebook' : user.provider} sign-in. Please use ${user.provider === 'google' ? 'Google' : user.provider === 'facebook' ? 'Facebook' : user.provider} to log in.`);
+            }
+
             // Check if user registered with OAuth (no password)
             if (!user.password && user.provider !== 'email') {
                 throw new Error(`Please sign in with ${user.provider}`);
@@ -72,11 +84,13 @@ class AuthService {
                 throw new Error('Invalid credentials');
             }
 
-            const { password, ...userWithoutPassword } = user;
             const token = generateToken(user.email);
 
-            console.log('User logged in successfully:', userWithoutPassword.email);
-            return { user: userWithoutPassword, token };
+            console.log('User logged in successfully:', user.email);
+            return {
+                user: { id: user.id }, // Only return user ID
+                token
+            };
         } catch (error) {
             console.error('Login error in service:', error);
             throw error;
@@ -91,18 +105,38 @@ class AuthService {
             });
 
             if (user) {
-                // Update provider info if user exists
+                // Check if user exists but with different provider
+                if (user.provider !== provider) {
+                    throw new Error(`This email is already registered with ${user.provider === 'email' ? 'email/password' : user.provider === 'google' ? 'Google' : user.provider === 'facebook' ? 'Facebook' : user.provider}. Please use that method to sign in or use a different email.`);
+                }
+
+                // Update provider info and profile photo if user exists with same provider
+                let hasUpdates = false;
+
                 if (provider === 'google' && !user.googleId) {
                     user.googleId = profile.id;
+                    hasUpdates = true;
                 } else if (provider === 'facebook' && !user.facebookId) {
                     user.facebookId = profile.id;
+                    hasUpdates = true;
                 }
-                user = await this.userRepository.save(user);
+
+                // Update profile photo from OAuth provider if not set or update with latest
+                const newProfilePhoto = profile.photos?.[0]?.value || '';
+                if (newProfilePhoto && (!user.profilePhoto || user.profilePhoto === '')) {
+                    user.profilePhoto = newProfilePhoto;
+                    hasUpdates = true;
+                }
+
+                if (hasUpdates) {
+                    user = await this.userRepository.save(user);
+                }
             } else {
-                // Create new user with default role
+                // Create new user with default role and profile photo from OAuth
                 const userData = {
                     email: email,
                     name: profile.displayName || `${profile.name?.givenName || ''} ${profile.name?.familyName || ''}`.trim(),
+                    profilePhoto: profile.photos?.[0]?.value || '', // Set profile photo from OAuth
                     provider: provider,
                     roles: ['user'], // Default role as array
                 };
@@ -115,10 +149,16 @@ class AuthService {
 
                 user = this.userRepository.create(userData);
                 user = await this.userRepository.save(user);
+
+                console.log(`New ${provider} user created with profile photo:`, {
+                    email: user.email,
+                    name: user.name,
+                    profilePhoto: user.profilePhoto
+                });
             }
 
-            const { password, ...userWithoutPassword } = user;
-            return userWithoutPassword;
+            const { password, googleId, facebookId, provider: userProvider, ...userWithoutSensitiveData } = user;
+            return userWithoutSensitiveData;
         } catch (error) {
             console.error('OAuth user creation/login error:', error);
             throw error;
@@ -132,8 +172,8 @@ class AuthService {
             });
 
             if (user) {
-                const { password, ...userWithoutPassword } = user;
-                return userWithoutPassword;
+                const { password, googleId, facebookId, provider, ...userWithoutSensitiveData } = user;
+                return userWithoutSensitiveData;
             }
             return null;
         } catch (error) {
@@ -149,8 +189,8 @@ class AuthService {
             });
 
             if (user) {
-                const { password, ...userWithoutPassword } = user;
-                return userWithoutPassword;
+                const { password, googleId, facebookId, provider, ...userWithoutSensitiveData } = user;
+                return userWithoutSensitiveData;
             }
             return null;
         } catch (error) {
@@ -160,7 +200,7 @@ class AuthService {
     }
 
     // New method to update user roles
-    async updateUserRoles(userId, roles) {
+    async updateUserRoles(userId, roles, currentUserEmail = null) {
         try {
             const user = await this.userRepository.findOne({
                 where: { id: userId }
@@ -170,11 +210,37 @@ class AuthService {
                 throw new Error('User not found');
             }
 
+            // Admin protection: Check if current user is trying to modify another admin
+            if (currentUserEmail) {
+                const currentUser = await this.userRepository.findOne({
+                    where: { email: currentUserEmail }
+                });
+
+                // Prevent admin from updating another admin's roles
+                if (user.roles && user.roles.includes('admin') && currentUser && currentUser.id !== userId) {
+                    throw new Error('Admins cannot modify other admin accounts');
+                }
+            }
+
+            // Admin limit validation (commented for future use)
+            /*
+            // Check if trying to add admin role and limit is reached
+            if (roles.includes('admin') && !user.roles.includes('admin')) {
+                const currentAdminCount = await this.userRepository.count({
+                    where: { roles: Like('%"admin"%') }
+                });
+
+                if (currentAdminCount >= 2) {
+                    throw new Error('Maximum number of admins (2) has been reached');
+                }
+            }
+            */
+
             user.roles = roles;
             const updatedUser = await this.userRepository.save(user);
 
-            const { password, ...userWithoutPassword } = updatedUser;
-            return userWithoutPassword;
+            const { password, googleId, facebookId, provider, ...userWithoutSensitiveData } = updatedUser;
+            return userWithoutSensitiveData;
         } catch (error) {
             console.error('Update user roles error:', error);
             throw error;
@@ -182,7 +248,7 @@ class AuthService {
     }
 
     // Method to add a role to a user
-    async addRoleToUser(userId, role) {
+    async addRoleToUser(userId, role, currentUserEmail = null) {
         try {
             const user = await this.userRepository.findOne({
                 where: { id: userId }
@@ -190,6 +256,18 @@ class AuthService {
 
             if (!user) {
                 throw new Error('User not found');
+            }
+
+            // Admin protection: Check if current user is trying to modify another admin
+            if (currentUserEmail) {
+                const currentUser = await this.userRepository.findOne({
+                    where: { email: currentUserEmail }
+                });
+
+                // Prevent admin from updating another admin's roles
+                if (user.roles && user.roles.includes('admin') && currentUser && currentUser.id !== userId) {
+                    throw new Error('Admins cannot modify other admin accounts');
+                }
             }
 
             // Ensure roles is an array
@@ -197,17 +275,31 @@ class AuthService {
                 user.roles = ['user'];
             }
 
+            // Admin limit validation (commented for future use)
+            /*
+            // Check if trying to add admin role and limit is reached
+            if (role === 'admin' && !user.roles.includes('admin')) {
+                const currentAdminCount = await this.userRepository.count({
+                    where: { roles: Like('%"admin"%') }
+                });
+
+                if (currentAdminCount >= 2) {
+                    throw new Error('Maximum number of admins (2) has been reached');
+                }
+            }
+            */
+
             // Add role if it doesn't exist
             if (!user.roles.includes(role)) {
                 user.roles.push(role);
                 const updatedUser = await this.userRepository.save(user);
 
-                const { password, ...userWithoutPassword } = updatedUser;
-                return userWithoutPassword;
+                const { password, googleId, facebookId, provider, ...userWithoutSensitiveData } = updatedUser;
+                return userWithoutSensitiveData;
             }
 
-            const { password, ...userWithoutPassword } = user;
-            return userWithoutPassword;
+            const { password, googleId, facebookId, provider, ...userWithoutSensitiveData } = user;
+            return userWithoutSensitiveData;
         } catch (error) {
             console.error('Add role to user error:', error);
             throw error;
@@ -215,7 +307,7 @@ class AuthService {
     }
 
     // Method to remove a role from a user
-    async removeRoleFromUser(userId, role) {
+    async removeRoleFromUser(userId, role, currentUserEmail = null) {
         try {
             const user = await this.userRepository.findOne({
                 where: { id: userId }
@@ -223,6 +315,29 @@ class AuthService {
 
             if (!user) {
                 throw new Error('User not found');
+            }
+
+            // Admin protection: Check if current user is trying to modify another admin
+            if (currentUserEmail) {
+                const currentUser = await this.userRepository.findOne({
+                    where: { email: currentUserEmail }
+                });
+
+                // Prevent admin from updating another admin's roles
+                if (user.roles && user.roles.includes('admin') && currentUser && currentUser.id !== userId) {
+                    throw new Error('Admins cannot modify other admin accounts');
+                }
+
+                // Prevent admin from removing their own admin role if they are the only admin
+                if (role === 'admin' && currentUser && currentUser.id === userId) {
+                    const adminCount = await this.userRepository.count({
+                        where: { roles: Like('%"admin"%') }
+                    });
+
+                    if (adminCount <= 1) {
+                        throw new Error('Cannot remove admin role. At least one admin must remain in the system');
+                    }
+                }
             }
 
             // Ensure roles is an array
@@ -241,14 +356,26 @@ class AuthService {
 
                 const updatedUser = await this.userRepository.save(user);
 
-                const { password, ...userWithoutPassword } = updatedUser;
-                return userWithoutPassword;
+                const { password, googleId, facebookId, provider, ...userWithoutSensitiveData } = updatedUser;
+                return userWithoutSensitiveData;
             }
 
-            const { password, ...userWithoutPassword } = user;
-            return userWithoutPassword;
+            const { password, googleId, facebookId, provider, ...userWithoutSensitiveData } = user;
+            return userWithoutSensitiveData;
         } catch (error) {
             console.error('Remove role from user error:', error);
+            throw error;
+        }
+    }
+
+    // Helper method to get admin count (for future use)
+    async getAdminCount() {
+        try {
+            return await this.userRepository.count({
+                where: { roles: Like('%"admin"%') }
+            });
+        } catch (error) {
+            console.error('Get admin count error:', error);
             throw error;
         }
     }

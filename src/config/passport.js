@@ -20,12 +20,38 @@ const configurePassport = () => {
         callbackURL: `${process.env.BACKEND_URL || 'http://localhost:8000'}/api/auth/google/callback`
     }, async (accessToken, refreshToken, profile, done) => {
         try {
-            console.log('Google profile:', profile);
+            console.log('Google profile received:', {
+                id: profile.id,
+                email: profile.emails?.[0]?.value,
+                name: profile.displayName,
+                photo: profile.photos?.[0]?.value
+            });
+
             const user = await authService.findOrCreateOAuthUser(profile, 'google');
             return done(null, user);
         } catch (error) {
             console.error('Google OAuth error:', error);
-            return done(error, null);
+
+            // Handle provider conflict errors with detailed info
+            if (error.message.includes('already registered with')) {
+                return done(null, false, {
+                    message: error.message,
+                    type: 'provider_conflict',
+                    details: {
+                        email: profile.emails?.[0]?.value,
+                        conflictProvider: error.message.includes('email/password') ? 'email' :
+                            error.message.includes('Facebook') ? 'facebook' : 'unknown',
+                        attemptedProvider: 'google'
+                    }
+                });
+            }
+
+            // Handle other OAuth errors
+            return done(null, false, {
+                message: process.env.NODE_ENV === 'development' ? error.message : 'Google authentication failed',
+                type: 'oauth_error',
+                provider: 'google'
+            });
         }
     }));
 
@@ -35,15 +61,41 @@ const configurePassport = () => {
             clientID: process.env.FACEBOOK_APP_ID,
             clientSecret: process.env.FACEBOOK_APP_SECRET,
             callbackURL: `${process.env.BACKEND_URL || 'http://localhost:8000'}/api/auth/facebook/callback`,
-            profileFields: ['id', 'emails', 'name']
+            profileFields: ['id', 'emails', 'name', 'photos']
         }, async (accessToken, refreshToken, profile, done) => {
             try {
-                console.log('Facebook profile:', profile);
+                console.log('Facebook profile received:', {
+                    id: profile.id,
+                    email: profile.emails?.[0]?.value,
+                    name: profile.displayName,
+                    photo: profile.photos?.[0]?.value
+                });
+
                 const user = await authService.findOrCreateOAuthUser(profile, 'facebook');
                 return done(null, user);
             } catch (error) {
                 console.error('Facebook OAuth error:', error);
-                return done(error, null);
+
+                // Handle provider conflict errors with detailed info
+                if (error.message.includes('already registered with')) {
+                    return done(null, false, {
+                        message: error.message,
+                        type: 'provider_conflict',
+                        details: {
+                            email: profile.emails?.[0]?.value,
+                            conflictProvider: error.message.includes('email/password') ? 'email' :
+                                error.message.includes('Google') ? 'google' : 'unknown',
+                            attemptedProvider: 'facebook'
+                        }
+                    });
+                }
+
+                // Handle other OAuth errors
+                return done(null, false, {
+                    message: process.env.NODE_ENV === 'development' ? error.message : 'Facebook authentication failed',
+                    type: 'oauth_error',
+                    provider: 'facebook'
+                });
             }
         }));
     } else {

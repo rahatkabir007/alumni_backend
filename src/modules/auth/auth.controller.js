@@ -50,13 +50,9 @@ class AuthController {
                     // Generate JWT token
                     const token = generateToken(req.user.email);
 
-                    // Redirect to frontend with token
+                    // Redirect to frontend with token and minimal user data
                     res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}&user=${encodeURIComponent(JSON.stringify({
-                        id: req.user.id,
-                        email: req.user.email,
-                        name: req.user.name,
-                        provider: req.user.provider,
-                        roles: req.user.roles || ['user']
+                        id: req.user.id
                     }))}`);
                 } catch (error) {
                     console.error('Google callback error:', error);
@@ -77,13 +73,9 @@ class AuthController {
                     // Generate JWT token
                     const token = generateToken(req.user.email);
 
-                    // Redirect to frontend with token
+                    // Redirect to frontend with token and minimal user data
                     res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}&user=${encodeURIComponent(JSON.stringify({
-                        id: req.user.id,
-                        email: req.user.email,
-                        name: req.user.name,
-                        provider: req.user.provider,
-                        roles: req.user.roles || ['user']
+                        id: req.user.id
                     }))}`);
                 } catch (error) {
                     console.error('Facebook callback error:', error);
@@ -99,11 +91,7 @@ class AuthController {
                     res.json({
                         success: true,
                         user: {
-                            id: req.user.id,
-                            email: req.user.email,
-                            name: req.user.name,
-                            provider: req.user.provider,
-                            roles: req.user.roles || ['user']
+                            id: req.user.id
                         }
                     });
                 } else {
@@ -145,8 +133,16 @@ class AuthController {
         // Role management routes (Admin only)
         app.put('/auth/users/:userId/roles', requireAdmin, async (req, res) => {
             try {
-                const { userId } = req.params;
+                const userId = parseInt(req.params.userId);
                 const { roles } = req.body;
+                const currentUserEmail = req.user?.email;
+
+                if (isNaN(userId)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Invalid user ID'
+                    });
+                }
 
                 if (!Array.isArray(roles) || roles.length === 0) {
                     return res.status(400).json({
@@ -165,10 +161,31 @@ class AuthController {
                     });
                 }
 
-                const updatedUser = await this.authService.updateUserRoles(parseInt(userId), roles);
-                res.json({ success: true, data: updatedUser });
+                const updatedUser = await this.authService.updateUserRoles(userId, roles, currentUserEmail);
+                res.json({
+                    success: true,
+                    data: updatedUser,
+                    message: 'User roles updated successfully'
+                });
             } catch (error) {
                 console.error('Update user roles error:', error);
+
+                if (error.message === 'User not found') {
+                    return res.status(404).json({
+                        success: false,
+                        error: 'User not found'
+                    });
+                }
+
+                if (error.message === 'Admins cannot modify other admin accounts' ||
+                    error.message === 'Maximum number of admins (2) has been reached' ||
+                    error.message.includes('At least one admin must remain')) {
+                    return res.status(403).json({
+                        success: false,
+                        error: error.message
+                    });
+                }
+
                 res.status(500).json({
                     success: false,
                     error: 'Failed to update user roles',
@@ -179,7 +196,16 @@ class AuthController {
 
         app.post('/auth/users/:userId/roles/:role', requireAdmin, async (req, res) => {
             try {
-                const { userId, role } = req.params;
+                const userId = parseInt(req.params.userId);
+                const { role } = req.params;
+                const currentUserEmail = req.user?.email;
+
+                if (isNaN(userId)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Invalid user ID'
+                    });
+                }
 
                 const validRoles = ['user', 'moderator', 'admin'];
                 if (!validRoles.includes(role)) {
@@ -189,10 +215,30 @@ class AuthController {
                     });
                 }
 
-                const updatedUser = await this.authService.addRoleToUser(parseInt(userId), role);
-                res.json({ success: true, data: updatedUser });
+                const updatedUser = await this.authService.addRoleToUser(userId, role, currentUserEmail);
+                res.json({
+                    success: true,
+                    data: updatedUser,
+                    message: `Role '${role}' added to user successfully`
+                });
             } catch (error) {
                 console.error('Add role to user error:', error);
+
+                if (error.message === 'User not found') {
+                    return res.status(404).json({
+                        success: false,
+                        error: 'User not found'
+                    });
+                }
+
+                if (error.message === 'Admins cannot modify other admin accounts' ||
+                    error.message === 'Maximum number of admins (2) has been reached') {
+                    return res.status(403).json({
+                        success: false,
+                        error: error.message
+                    });
+                }
+
                 res.status(500).json({
                     success: false,
                     error: 'Failed to add role to user',
@@ -203,15 +249,108 @@ class AuthController {
 
         app.delete('/auth/users/:userId/roles/:role', requireAdmin, async (req, res) => {
             try {
-                const { userId, role } = req.params;
+                const userId = parseInt(req.params.userId);
+                const { role } = req.params;
+                const currentUserEmail = req.user?.email;
 
-                const updatedUser = await this.authService.removeRoleFromUser(parseInt(userId), role);
-                res.json({ success: true, data: updatedUser });
+                if (isNaN(userId)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Invalid user ID'
+                    });
+                }
+
+                const updatedUser = await this.authService.removeRoleFromUser(userId, role, currentUserEmail);
+                res.json({
+                    success: true,
+                    data: updatedUser,
+                    message: `Role '${role}' removed from user successfully`
+                });
             } catch (error) {
                 console.error('Remove role from user error:', error);
+
+                if (error.message === 'User not found') {
+                    return res.status(404).json({
+                        success: false,
+                        error: 'User not found'
+                    });
+                }
+
+                if (error.message === 'Admins cannot modify other admin accounts' ||
+                    error.message.includes('At least one admin must remain')) {
+                    return res.status(403).json({
+                        success: false,
+                        error: error.message
+                    });
+                }
+
                 res.status(500).json({
                     success: false,
                     error: 'Failed to remove role from user',
+                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+                });
+            }
+        });
+
+        // Add endpoint for changing user role (matches frontend API call)
+        app.patch('/users/:userId/role', requireAdmin, async (req, res) => {
+            try {
+                const userId = parseInt(req.params.userId);
+                const { roles } = req.body;
+                const currentUserEmail = req.user?.email;
+
+                if (isNaN(userId)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Invalid user ID'
+                    });
+                }
+
+                if (!Array.isArray(roles) || roles.length === 0) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Roles must be a non-empty array'
+                    });
+                }
+
+                const validRoles = ['user', 'moderator', 'admin'];
+                const invalidRoles = roles.filter(role => !validRoles.includes(role));
+
+                if (invalidRoles.length > 0) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Invalid roles: ${invalidRoles.join(', ')}. Valid roles: ${validRoles.join(', ')}`
+                    });
+                }
+
+                const updatedUser = await this.authService.updateUserRoles(userId, roles, currentUserEmail);
+                res.json({
+                    success: true,
+                    data: updatedUser,
+                    message: 'User role changed successfully'
+                });
+            } catch (error) {
+                console.error('Change user role error:', error);
+
+                if (error.message === 'User not found') {
+                    return res.status(404).json({
+                        success: false,
+                        error: 'User not found'
+                    });
+                }
+
+                if (error.message === 'Admins cannot modify other admin accounts' ||
+                    error.message === 'Maximum number of admins (2) has been reached' ||
+                    error.message.includes('At least one admin must remain')) {
+                    return res.status(403).json({
+                        success: false,
+                        error: error.message
+                    });
+                }
+
+                res.status(500).json({
+                    success: false,
+                    error: 'Failed to change user role',
                     message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
                 });
             }
