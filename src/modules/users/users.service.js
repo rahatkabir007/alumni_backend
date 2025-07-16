@@ -1,7 +1,17 @@
 import { getDataSource } from "../../config/database.js";
 import { User } from "../../entities/User.js";
 import { Like, In } from "typeorm";
-import { sanitizeName, validateProfilePhoto } from "../../helpers/validation.helper.js";
+import {
+    sanitizeName,
+    validateProfilePhoto,
+    validatePhone,
+    validateLocation,
+    validateProfession,
+    validateGraduationYear,
+    validateBatch,
+    validateBio,
+    validateLeftAtYear
+} from "../../helpers/validation.helper.js";
 
 class UsersService {
     constructor() {
@@ -31,32 +41,49 @@ class UsersService {
             // Build query builder for complex filtering
             const queryBuilder = this.userRepository.createQueryBuilder('user');
 
-            // Select specific fields
+            // Select specific fields (including new fields)
             queryBuilder.select([
                 'user.id',
                 'user.email',
                 'user.name',
+                'user.phone',
+                'user.location',
+                'user.profession',
+                'user.graduation_year',
+                'user.batch',
+                'user.bio',
+                'user.isActive',
+                'user.isGraduated',
+                'user.left_at',
                 'user.profilePhoto',
                 'user.roles',
                 'user.created_at',
                 'user.updated_at'
             ]);
 
-            // Apply search filter
+            // Apply search filter (expanded to include new fields)
             if (search && search.trim() !== '') {
                 queryBuilder.andWhere(
-                    '(user.name ILIKE :search OR user.email ILIKE :search)',
+                    '(user.name ILIKE :search OR user.email ILIKE :search OR user.profession ILIKE :search OR user.location ILIKE :search OR user.batch ILIKE :search)',
                     { search: `%${search}%` }
                 );
             }
 
             // Apply role filter
             if (role !== 'all' && role.trim() !== '') {
-                // Use JSON contains operator for PostgreSQL
                 queryBuilder.andWhere(
                     'user.roles::jsonb ? :role',
                     { role: role }
                 );
+            }
+
+            // Apply status filter (active/inactive)
+            if (status !== 'all' && status.trim() !== '') {
+                if (status === 'active') {
+                    queryBuilder.andWhere('user.isActive = :isActive', { isActive: true });
+                } else if (status === 'inactive') {
+                    queryBuilder.andWhere('user.isActive = :isActive', { isActive: false });
+                }
             }
 
             // Apply sorting
@@ -93,7 +120,9 @@ class UsersService {
             'updatedAt': 'updated_at',
             'name': 'name',
             'email': 'email',
-            'id': 'id'
+            'id': 'id',
+            'graduation_year': 'graduation_year',
+            'left_at': 'left_at'
         };
 
         return fieldMapping[sortBy] || 'created_at';
@@ -103,7 +132,11 @@ class UsersService {
         try {
             return await this.userRepository.findOne({
                 where: { id },
-                select: ['id', 'email', 'name', 'profilePhoto', 'roles', 'created_at', 'updated_at']
+                select: [
+                    'id', 'email', 'name', 'phone', 'location', 'profession',
+                    'graduation_year', 'batch', 'bio', 'isActive', 'isGraduated',
+                    'left_at', 'profilePhoto', 'roles', 'created_at', 'updated_at'
+                ]
             });
         } catch (error) {
             console.error('Get user by ID error:', error);
@@ -115,7 +148,11 @@ class UsersService {
         try {
             return await this.userRepository.findOne({
                 where: { email },
-                select: ['id', 'email', 'name', 'profilePhoto', 'roles', 'created_at', 'updated_at']
+                select: [
+                    'id', 'email', 'name', 'phone', 'location', 'profession',
+                    'graduation_year', 'batch', 'bio', 'isActive', 'isGraduated',
+                    'left_at', 'profilePhoto', 'roles', 'created_at', 'updated_at'
+                ]
             });
         } catch (error) {
             console.error('Get user by email error:', error);
@@ -128,8 +165,13 @@ class UsersService {
             const queryBuilder = this.userRepository.createQueryBuilder('user');
 
             queryBuilder
-                .select(['user.id', 'user.email', 'user.name', 'user.profilePhoto', 'user.roles'])
-                .where('user.name ILIKE :query OR user.email ILIKE :query', { query: `%${query}%` })
+                .select([
+                    'user.id', 'user.email', 'user.name', 'user.profession',
+                    'user.batch', 'user.profilePhoto', 'user.roles'
+                ])
+                .where('user.name ILIKE :query OR user.email ILIKE :query OR user.profession ILIKE :query OR user.batch ILIKE :query',
+                    { query: `%${query}%` })
+                .andWhere('user.isActive = :isActive', { isActive: true }) // Only show active users in search
                 .limit(limit);
 
             return await queryBuilder.getMany();
@@ -202,23 +244,33 @@ class UsersService {
                 throw new Error('User not found');
             }
 
-            // Don't allow updating password or sensitive fields through this method
-            const allowedFields = ['name', 'profilePhoto'];
+            // Expanded allowed fields to include new properties
+            const allowedFields = [
+                'name', 'phone', 'location', 'profession', 'graduation_year',
+                'batch', 'bio', 'isActive', 'isGraduated', 'left_at', 'profilePhoto'
+            ];
             const filteredData = {};
 
             allowedFields.forEach(field => {
                 if (updateData[field] !== undefined) {
-                    if (field === 'name') {
-                        filteredData[field] = sanitizeName(updateData[field]);
-                    } else if (field === 'profilePhoto') {
-                        filteredData[field] = validateProfilePhoto(updateData[field]);
-                        // Mark profile photo as manually set when updated through this method
-                        filteredData.profilePhotoSource = 'manual';
-                    } else {
-                        filteredData[field] = updateData[field];
-                    }
+                    filteredData[field] = this.validateAndSanitizeField(field, updateData[field]);
                 }
             });
+
+            // Special handling for isGraduated and left_at logic
+            if (updateData.isGraduated !== undefined) {
+                filteredData.isGraduated = Boolean(updateData.isGraduated);
+
+                // If user is graduated, clear left_at year
+                if (filteredData.isGraduated) {
+                    filteredData.left_at = null;
+                }
+            }
+
+            // Validate left_at only if user is not graduated
+            if (updateData.left_at !== undefined && !filteredData.isGraduated && user.isGraduated === false) {
+                filteredData.left_at = validateLeftAtYear(updateData.left_at);
+            }
 
             Object.assign(user, filteredData);
             const updatedUser = await this.userRepository.save(user);
@@ -241,23 +293,33 @@ class UsersService {
                 throw new Error('User not found');
             }
 
-            // Allow users to update their own profile information
-            const allowedFields = ['name', 'profilePhoto'];
+            // Users can update their own profile information (excluding admin flags)
+            const allowedFields = [
+                'name', 'phone', 'location', 'profession', 'graduation_year',
+                'batch', 'bio', 'isGraduated', 'left_at', 'profilePhoto'
+            ];
             const filteredData = {};
 
             allowedFields.forEach(field => {
                 if (updateData[field] !== undefined) {
-                    if (field === 'name') {
-                        filteredData[field] = sanitizeName(updateData[field]);
-                    } else if (field === 'profilePhoto') {
-                        filteredData[field] = validateProfilePhoto(updateData[field]);
-                        // Mark profile photo as manually set when updated by user
-                        filteredData.profilePhotoSource = 'manual';
-                    } else {
-                        filteredData[field] = updateData[field];
-                    }
+                    filteredData[field] = this.validateAndSanitizeField(field, updateData[field]);
                 }
             });
+
+            // Special handling for isGraduated and left_at logic
+            if (updateData.isGraduated !== undefined) {
+                filteredData.isGraduated = Boolean(updateData.isGraduated);
+
+                // If user is graduated, clear left_at year
+                if (filteredData.isGraduated) {
+                    filteredData.left_at = null;
+                }
+            }
+
+            // Validate left_at only if user is not graduated
+            if (updateData.left_at !== undefined && !filteredData.isGraduated && user.isGraduated === false) {
+                filteredData.left_at = validateLeftAtYear(updateData.left_at);
+            }
 
             Object.assign(user, filteredData);
             const updatedUser = await this.userRepository.save(user);
@@ -270,62 +332,38 @@ class UsersService {
         }
     }
 
-    // Helper method to sanitize and validate names
-    sanitizeName(name) {
-        if (!name || typeof name !== 'string') {
-            throw new Error('Name must be a non-empty string');
-        }
-
-        // Remove extra whitespace and limit length
-        const sanitized = name.replace(/\s+/g, ' ').trim();
-
-        if (sanitized.length === 0) {
-            throw new Error('Name cannot be empty');
-        }
-
-        if (sanitized.length > 100) {
-            throw new Error('Name cannot exceed 100 characters');
-        }
-
-        // Check for potentially harmful characters (basic XSS prevention)
-        if (/<script|javascript:|on\w+=/i.test(sanitized)) {
-            throw new Error('Name contains invalid characters');
-        }
-
-        return sanitized;
-    }
-
-    // Helper method to validate profile photo URLs
-    validateProfilePhoto(photoUrl) {
-        if (!photoUrl) {
-            return ''; // Allow empty string
-        }
-
-        if (typeof photoUrl !== 'string') {
-            throw new Error('Profile photo must be a valid URL string');
-        }
-
-        // Validate URL format
-        if (!this.isValidUrl(photoUrl)) {
-            throw new Error('Invalid profile photo URL format');
-        }
-
-        // Check URL length
-        if (photoUrl.length > 500) {
-            throw new Error('Profile photo URL cannot exceed 500 characters');
-        }
-
-        return photoUrl;
-    }
-
-    // Helper method to validate URL format (enhanced)
-    isValidUrl(string) {
-        try {
-            const url = new URL(string);
-            // Only allow http and https protocols
-            return url.protocol === 'http:' || url.protocol === 'https:';
-        } catch (_) {
-            return false;
+    // Helper method to validate and sanitize individual fields
+    validateAndSanitizeField(field, value) {
+        switch (field) {
+            case 'name':
+                return sanitizeName(value);
+            case 'phone':
+                return validatePhone(value);
+            case 'location':
+                return validateLocation(value);
+            case 'profession':
+                return validateProfession(value);
+            case 'graduation_year':
+                return validateGraduationYear(value);
+            case 'batch':
+                return validateBatch(value);
+            case 'bio':
+                return validateBio(value);
+            case 'left_at':
+                return validateLeftAtYear(value);
+            case 'profilePhoto':
+                const validatedPhoto = validateProfilePhoto(value);
+                // Mark as manually set if updating photo
+                if (validatedPhoto !== value) {
+                    return { profilePhoto: validatedPhoto, profilePhotoSource: 'manual' };
+                }
+                return validatedPhoto;
+            case 'isActive':
+                return Boolean(value);
+            case 'isGraduated':
+                return Boolean(value);
+            default:
+                return value;
         }
     }
 

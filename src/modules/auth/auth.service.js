@@ -40,7 +40,9 @@ class AuthService {
                 name: userData.name,
                 profilePhoto: userData.profilePhoto || '',
                 roles: ['user'], // Default role as array
-                provider: 'email'
+                provider: 'email',
+                isActive: true, // Default to active
+                isGraduated: true // Default to graduated (most common case)
             });
 
             const savedUser = await this.userRepository.save(user);
@@ -150,6 +152,8 @@ class AuthService {
                     profilePhotoSource: profilePhoto ? provider : null,
                     provider: provider,
                     roles: ['user'],
+                    isActive: true, // Default to active
+                    isGraduated: true // Default to graduated
                 };
 
                 if (provider === 'google') {
