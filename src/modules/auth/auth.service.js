@@ -91,7 +91,7 @@ class AuthService {
 
             console.log('User logged in successfully:', user.email);
             return {
-                user: { id: user.id }, // Only return user ID
+                user: { id: user.id, email: user.email }, // Only return user ID
                 token
             };
         } catch (error) {
@@ -380,6 +380,40 @@ class AuthService {
             return userWithoutSensitiveData;
         } catch (error) {
             console.error('Remove role from user error:', error);
+            throw error;
+        }
+    }
+
+    // New method to update user roles by email
+    async updateUserRolesByEmail(userEmail, roles, currentUserEmail = null) {
+        try {
+            const user = await this.userRepository.findOne({
+                where: { email: userEmail }
+            });
+
+            if (!user) {
+                throw new Error('User not found');
+            }
+
+            // Admin protection: Check if current user is trying to modify another admin
+            if (currentUserEmail) {
+                const currentUser = await this.userRepository.findOne({
+                    where: { email: currentUserEmail }
+                });
+
+                // Prevent admin from updating another admin's roles
+                if (user.roles && user.roles.includes('admin') && currentUser && currentUser.email !== userEmail) {
+                    throw new Error('Admins cannot modify other admin accounts');
+                }
+            }
+
+            user.roles = roles;
+            const updatedUser = await this.userRepository.save(user);
+
+            const { password, googleId, facebookId, provider, ...userWithoutSensitiveData } = updatedUser;
+            return userWithoutSensitiveData;
+        } catch (error) {
+            console.error('Update user roles by email error:', error);
             throw error;
         }
     }

@@ -92,111 +92,111 @@ class UsersController {
         // GET /users/123 - get user by ID
         // PUT /users/123 - update user by ID
         // Special case: /users/me resolves to current user's ID
-        app.route('/users/:id')
-            .get(this.handleUserAccess.bind(this), async (req, res) => {
-                try {
-                    const userId = req.resolvedUserId;
-                    const result = await this.usersService.getUserById(userId);
+        // app.route('/users/:id')
+        //     .get(this.handleUserAccess.bind(this), async (req, res) => {
+        //         try {
+        //             const userId = req.resolvedUserId;
+        //             const result = await this.usersService.getUserById(userId);
 
-                    if (!result) {
-                        return res.status(404).json({
-                            success: false,
-                            error: 'User not found'
-                        });
-                    }
-                    res.json({ success: true, data: result });
-                } catch (error) {
-                    console.error('Get user by ID error:', error);
-                    res.status(500).json({
-                        success: false,
-                        error: 'Failed to fetch user',
-                        message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-                    });
-                }
-            })
-            .put(this.handleUserAccess.bind(this), async (req, res) => {
-                try {
-                    const userId = req.resolvedUserId;
-                    const isCurrentUser = req.isCurrentUser;
+        //             if (!result) {
+        //                 return res.status(404).json({
+        //                     success: false,
+        //                     error: 'User not found'
+        //                 });
+        //             }
+        //             res.json({ success: true, data: result });
+        //         } catch (error) {
+        //             console.error('Get user by ID error:', error);
+        //             res.status(500).json({
+        //                 success: false,
+        //                 error: 'Failed to fetch user',
+        //                 message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        //             });
+        //         }
+        //     })
+        //     .put(this.handleUserAccess.bind(this), async (req, res) => {
+        //         try {
+        //             const userId = req.resolvedUserId;
+        //             const isCurrentUser = req.isCurrentUser;
 
-                    // If updating own profile, use updateCurrentUser (limited fields)
-                    // If admin updating any user, use updateUser (all fields)
-                    const result = isCurrentUser
-                        ? await this.usersService.updateCurrentUser(req.user.email, req.body)
-                        : await this.usersService.updateUser(userId, req.body);
+        //             // If updating own profile, use updateCurrentUser (limited fields)
+        //             // If admin updating any user, use updateUser (all fields)
+        //             const result = isCurrentUser
+        //                 ? await this.usersService.updateCurrentUser(req.user.email, req.body)
+        //                 : await this.usersService.updateUser(userId, req.body);
 
-                    res.json({
-                        success: true,
-                        data: result,
-                        message: 'User updated successfully'
-                    });
-                } catch (error) {
-                    console.error('Update user error:', error);
+        //             res.json({
+        //                 success: true,
+        //                 data: result,
+        //                 message: 'User updated successfully'
+        //             });
+        //         } catch (error) {
+        //             console.error('Update user error:', error);
 
-                    if (error.message === 'User not found') {
-                        return res.status(404).json({
-                            success: false,
-                            error: 'User not found'
-                        });
-                    }
+        //             if (error.message === 'User not found') {
+        //                 return res.status(404).json({
+        //                     success: false,
+        //                     error: 'User not found'
+        //                 });
+        //             }
 
-                    if (error.message === 'Invalid profile photo URL format') {
-                        return res.status(400).json({
-                            success: false,
-                            error: 'Invalid profile photo URL format'
-                        });
-                    }
+        //             if (error.message === 'Invalid profile photo URL format') {
+        //                 return res.status(400).json({
+        //                     success: false,
+        //                     error: 'Invalid profile photo URL format'
+        //                 });
+        //             }
 
-                    res.status(500).json({
-                        success: false,
-                        error: 'Failed to update user',
-                        message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-                    });
-                }
-            })
-            .delete(requireAdmin, async (req, res) => {
-                try {
-                    const userId = req.params.id === 'me'
-                        ? (await this.getUserIdFromToken(req)).userId
-                        : parseInt(req.params.id);
+        //             res.status(500).json({
+        //                 success: false,
+        //                 error: 'Failed to update user',
+        //                 message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        //             });
+        //         }
+        //     })
+        //     .delete(requireAdmin, async (req, res) => {
+        //         try {
+        //             const userId = req.params.id === 'me'
+        //                 ? (await this.getUserIdFromToken(req)).userId
+        //                 : parseInt(req.params.id);
 
-                    if (isNaN(userId)) {
-                        return res.status(400).json({
-                            success: false,
-                            error: 'Invalid user ID'
-                        });
-                    }
+        //             if (isNaN(userId)) {
+        //                 return res.status(400).json({
+        //                     success: false,
+        //                     error: 'Invalid user ID'
+        //                 });
+        //             }
 
-                    // Prevent admin from deleting themselves
-                    const currentUser = await this.getUserIdFromToken(req);
-                    if (currentUser.userId === userId) {
-                        return res.status(400).json({
-                            success: false,
-                            error: 'You cannot delete your own account'
-                        });
-                    }
+        //             // Prevent admin from deleting themselves
+        //             const currentUser = await this.getUserIdFromToken(req);
+        //             if (currentUser.userId === userId) {
+        //                 return res.status(400).json({
+        //                     success: false,
+        //                     error: 'You cannot delete your own account'
+        //                 });
+        //             }
 
-                    const result = await this.usersService.deleteUser(userId);
-                    if (!result) {
-                        return res.status(404).json({
-                            success: false,
-                            error: 'User not found'
-                        });
-                    }
+        //             const result = await this.usersService.deleteUser(userId);
+        //             if (!result) {
+        //                 return res.status(404).json({
+        //                     success: false,
+        //                     error: 'User not found'
+        //                 });
+        //             }
 
-                    res.json({
-                        success: true,
-                        message: 'User deleted successfully'
-                    });
-                } catch (error) {
-                    console.error('Delete user error:', error);
-                    res.status(500).json({
-                        success: false,
-                        error: 'Failed to delete user',
-                        message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-                    });
-                }
-            });
+        //             res.json({
+        //                 success: true,
+        //                 message: 'User deleted successfully'
+        //             });
+        //         } catch (error) {
+        //             console.error('Delete user error:', error);
+        //             res.status(500).json({
+        //                 success: false,
+        //                 error: 'Failed to delete user',
+        //                 message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        //             });
+        //         }
+        //     });
 
         // Bulk operations for users (admin only)
         app.route('/users/bulk')
@@ -268,6 +268,121 @@ class UsersController {
                     });
                 }
             });
+
+        // Get user by email endpoint (protected route)
+        app.get('/users/:email', authMiddleware, async (req, res) => {
+            try {
+                const { email } = req.params;
+                const currentUserEmail = req.user?.email;
+
+                if (!email || !email.includes('@')) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Valid email address is required'
+                    });
+                }
+
+                // Get current user info to check permissions
+                const currentUser = await this.usersService.getUserByEmail(currentUserEmail);
+                if (!currentUser) {
+                    return res.status(401).json({
+                        success: false,
+                        error: 'Authentication failed'
+                    });
+                }
+
+                // Check if user is accessing their own profile or is admin
+                const isOwnProfile = currentUserEmail === email;
+                const isAdmin = currentUser.roles?.includes('admin');
+
+                if (!isOwnProfile && !isAdmin) {
+                    return res.status(403).json({
+                        success: false,
+                        error: 'Access denied. You can only access your own profile or need admin privileges.'
+                    });
+                }
+
+                const user = await this.usersService.getUserByEmail(email);
+
+                if (!user) {
+                    return res.status(404).json({
+                        success: false,
+                        error: 'User not found'
+                    });
+                }
+
+                res.json({ success: true, data: user });
+            } catch (error) {
+                console.error('Get user by email error:', error);
+                res.status(500).json({
+                    success: false,
+                    error: 'Failed to fetch user',
+                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+                });
+            }
+        });
+
+        // Update user by email endpoint
+        app.put('/users/:email', authMiddleware, async (req, res) => {
+            try {
+                const { email } = req.params;
+                const currentUserEmail = req.user?.email;
+
+                if (!email || !email.includes('@')) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Valid email address is required'
+                    });
+                }
+
+                // Get current user info to check permissions
+                const currentUser = await this.usersService.getUserByEmail(currentUserEmail);
+                if (!currentUser) {
+                    return res.status(401).json({
+                        success: false,
+                        error: 'Authentication failed'
+                    });
+                }
+
+                // Check if user is updating their own profile or is admin
+                const isOwnProfile = currentUserEmail === email;
+                const isAdmin = currentUser.roles?.includes('admin');
+
+                if (!isOwnProfile && !isAdmin) {
+                    return res.status(403).json({
+                        success: false,
+                        error: 'Access denied. You can only update your own profile or need admin privileges.'
+                    });
+                }
+
+                // If updating own profile, use updateCurrentUser (limited fields)
+                // If admin updating any user, use updateUser (all fields)
+                const result = isOwnProfile
+                    ? await this.usersService.updateCurrentUser(email, req.body)
+                    : await this.usersService.updateUserByEmail(email, req.body);
+
+                res.json({
+                    success: true,
+                    data: result,
+                    message: 'User updated successfully'
+                });
+            } catch (error) {
+                console.error('Update user by email error:', error);
+
+                if (error.message === 'User not found') {
+                    return res.status(404).json({
+                        success: false,
+                        error: 'User not found'
+                    });
+                }
+
+                res.status(500).json({
+                    success: false,
+                    error: 'Failed to update user',
+                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+                });
+            }
+        });
     }
 
     // Middleware to handle user access control and resolve "me" to actual user ID

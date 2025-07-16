@@ -415,6 +415,53 @@ class UsersService {
             throw error;
         }
     }
+
+    async updateUserByEmail(email, updateData) {
+        try {
+            const user = await this.userRepository.findOne({ where: { email } });
+
+            if (!user) {
+                throw new Error('User not found');
+            }
+
+            // Expanded allowed fields to include new properties
+            const allowedFields = [
+                'name', 'phone', 'location', 'profession', 'graduation_year',
+                'batch', 'bio', 'isActive', 'isGraduated', 'left_at', 'profilePhoto'
+            ];
+            const filteredData = {};
+
+            allowedFields.forEach(field => {
+                if (updateData[field] !== undefined) {
+                    filteredData[field] = this.validateAndSanitizeField(field, updateData[field]);
+                }
+            });
+
+            // Special handling for isGraduated and left_at logic
+            if (updateData.isGraduated !== undefined) {
+                filteredData.isGraduated = Boolean(updateData.isGraduated);
+
+                // If user is graduated, clear left_at year
+                if (filteredData.isGraduated) {
+                    filteredData.left_at = null;
+                }
+            }
+
+            // Validate left_at only if user is not graduated
+            if (updateData.left_at !== undefined && !filteredData.isGraduated && user.isGraduated === false) {
+                filteredData.left_at = validateLeftAtYear(updateData.left_at);
+            }
+
+            Object.assign(user, filteredData);
+            const updatedUser = await this.userRepository.save(user);
+
+            const { password, googleId, facebookId, provider, ...userWithoutSensitiveData } = updatedUser;
+            return userWithoutSensitiveData;
+        } catch (error) {
+            console.error('Update user by email error:', error);
+            throw error;
+        }
+    }
 }
 
 export { UsersService };

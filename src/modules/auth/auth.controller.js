@@ -1,7 +1,9 @@
 import passport from 'passport';
+import jwt from 'jsonwebtoken';
 import { generateToken } from '../../utils/jwtSign.js';
 import { AuthService } from './auth.service.js';
 import { requireAdmin, roleMiddleware } from '../../middlewares/role.middleware.js';
+import { authMiddleware } from '../../middlewares/auth.middleware.js';
 
 class AuthController {
     constructor() {
@@ -55,14 +57,15 @@ class AuthController {
                         // Generate JWT token (replaces session-based auth)
                         const token = generateToken(req.user.email);
 
-                        // Clear OAuth session after successful authentication
-                        req.session.destroy((err) => {
-                            if (err) console.log('Session cleanup error:', err);
-                        });
+                        // // Clear OAuth session after successful authentication
+                        // req.session.destroy((err) => {
+                        //     if (err) console.log('Session cleanup error:', err);
+                        // });
 
                         // Redirect to frontend with JWT token
                         res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}&user=${encodeURIComponent(JSON.stringify({
-                            id: req.user.id
+                            id: req.user.id,
+                            email: req.user.email,
                         }))}`);
                     } catch (error) {
                         console.error('Google callback error:', error);
@@ -104,6 +107,37 @@ class AuthController {
             }
         });
 
+        // Get current user profile (protected route) - Apply auth middleware
+        app.get('/auth/me', authMiddleware, async (req, res) => {
+            try {
+                console.log('Auth/me request user:', req.user);
+
+                // Extract email from JWT token
+                const userEmail = req.user?.email;
+
+                if (!userEmail) {
+                    return res.status(401).json({ success: false, message: 'Not authenticated' });
+                }
+
+                const user = await this.authService.getUserByEmail(userEmail);
+                console.log("🚀 ~ AuthController ~ app.get ~ user:", user);
+
+                if (!user) {
+                    return res.status(404).json({ success: false, message: 'User not found' });
+                }
+
+                res.json({ success: true, data: user });
+            } catch (error) {
+                console.error('Get current user error:', error);
+                res.status(500).json({
+                    success: false,
+                    error: 'Failed to fetch user profile',
+                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+                });
+            }
+        });
+
+
         // Logout endpoint
         app.post('/auth/logout', (req, res) => {
             // For JWT-based auth, logout is primarily handled client-side
@@ -113,6 +147,44 @@ class AuthController {
                 timestamp: new Date().toISOString()
             });
         });
+
+        // Test JWT token endpoint (development only)
+        if (process.env.NODE_ENV === 'development') {
+            app.post('/auth/test-token', async (req, res) => {
+                try {
+                    const { email } = req.body;
+
+                    if (!email) {
+                        return res.status(400).json({
+                            success: false,
+                            error: 'Email required'
+                        });
+                    }
+
+                    const token = generateToken(email);
+
+                    // Immediately verify the token
+                    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+                    res.json({
+                        success: true,
+                        data: {
+                            token,
+                            decoded,
+                            secret_info: {
+                                length: process.env.JWT_SECRET?.length,
+                                preview: process.env.JWT_SECRET?.substring(0, 10) + '...'
+                            }
+                        }
+                    });
+                } catch (error) {
+                    res.status(500).json({
+                        success: false,
+                        error: error.message
+                    });
+                }
+            });
+        }
     }
 }
 
