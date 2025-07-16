@@ -18,8 +18,7 @@ const publicRoutes = [
     '/api/auth/google/callback',
     '/api/auth/facebook',
     '/api/auth/facebook/callback',
-    '/api/auth/status',
-    '/api/user/profile/update' // New route for user profile update
+    '/api/auth/status'
 ];
 
 export const authMiddleware = (req, res, next) => {

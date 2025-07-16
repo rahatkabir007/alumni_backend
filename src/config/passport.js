@@ -10,56 +10,44 @@ const configurePassport = () => {
     console.log('Passport Environment Debug:', {
         hasGOOGLE_CLIENT_ID: !!process.env.GOOGLE_CLIENT_ID,
         hasGOOGLE_CLIENT_SECRET: !!process.env.GOOGLE_CLIENT_SECRET,
-        GOOGLE_CLIENT_ID_VALUE: process.env.GOOGLE_CLIENT_ID?.substring(0, 10) + '...',
-        BACKEND_URL: process.env.BACKEND_URL
+        GOOGLE_CLIENT_ID_VALUE: process.env.GOOGLE_CLIENT_ID
     });
 
-    // Only configure Google OAuth if credentials are available
-    if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-        console.log('✓ Configuring Google OAuth Strategy');
+    // Google OAuth Strategy
+    passport.use(new GoogleStrategy({
+        clientID: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        callbackURL: `${process.env.BACKEND_URL || 'http://localhost:8000'}/api/auth/google/callback`
+    }, async (accessToken, refreshToken, profile, done) => {
+        try {
+            console.log('Google profile:', profile);
+            const user = await authService.findOrCreateOAuthUser(profile, 'google');
+            return done(null, user);
+        } catch (error) {
+            console.error('Google OAuth error:', error);
+            return done(error, null);
+        }
+    }));
 
-        passport.use(new GoogleStrategy({
-            clientID: process.env.GOOGLE_CLIENT_ID,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-            callbackURL: `${process.env.BACKEND_URL || 'http://localhost:8000'}/api/auth/google/callback`
+    // Facebook OAuth Strategy (only if credentials are provided)
+    if (process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET) {
+        passport.use(new FacebookStrategy({
+            clientID: process.env.FACEBOOK_APP_ID,
+            clientSecret: process.env.FACEBOOK_APP_SECRET,
+            callbackURL: `${process.env.BACKEND_URL || 'http://localhost:8000'}/api/auth/facebook/callback`,
+            profileFields: ['id', 'emails', 'name']
         }, async (accessToken, refreshToken, profile, done) => {
             try {
-                console.log('Google profile received:', {
-                    id: profile.id,
-                    email: profile.emails?.[0]?.value,
-                    name: profile.displayName,
-                    photo: profile.photos?.[0]?.value
-                });
-
-                const user = await authService.findOrCreateOAuthUser(profile, 'google');
+                console.log('Facebook profile:', profile);
+                const user = await authService.findOrCreateOAuthUser(profile, 'facebook');
                 return done(null, user);
             } catch (error) {
-                console.error('Google OAuth error:', error);
-
-                // Handle provider conflict errors with detailed info
-                if (error.message.includes('already registered with')) {
-                    return done(null, false, {
-                        message: error.message,
-                        type: 'provider_conflict',
-                        details: {
-                            email: profile.emails?.[0]?.value,
-                            conflictProvider: error.message.includes('email/password') ? 'email' :
-                                error.message.includes('Facebook') ? 'facebook' : 'unknown',
-                            attemptedProvider: 'google'
-                        }
-                    });
-                }
-
-                // Handle other OAuth errors
-                return done(null, false, {
-                    message: process.env.NODE_ENV === 'development' ? error.message : 'Google authentication failed',
-                    type: 'oauth_error',
-                    provider: 'google'
-                });
+                console.error('Facebook OAuth error:', error);
+                return done(error, null);
             }
         }));
     } else {
-        console.log('⚠ Google OAuth not configured - missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET');
+        console.log('Facebook OAuth not configured - missing FACEBOOK_APP_ID or FACEBOOK_APP_SECRET');
     }
 
     // Serialize user for session

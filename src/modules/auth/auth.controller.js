@@ -1,7 +1,9 @@
 import passport from 'passport';
+import jwt from 'jsonwebtoken';
 import { generateToken } from '../../utils/jwtSign.js';
 import { AuthService } from './auth.service.js';
 import { requireAdmin, roleMiddleware } from '../../middlewares/role.middleware.js';
+import { authMiddleware } from '../../middlewares/auth.middleware.js';
 
 class AuthController {
     constructor() {
@@ -115,17 +117,25 @@ class AuthController {
             }
         });
 
-        // Get current user profile (protected route)
-        app.get('/auth/me', async (req, res) => {
+        // Get current user profile (protected route) - Apply auth middleware
+        app.get('/auth/me', authMiddleware, async (req, res) => {
             try {
+                console.log('Auth/me request headers:', {
+                    authorization: req.headers.authorization?.substring(0, 20) + '...',
+                    'user-agent': req.headers['user-agent']
+                });
+                console.log('Auth/me decoded user from JWT:', req.user);
+
                 // Extract email from JWT token
                 const userEmail = req.user?.email;
 
                 if (!userEmail) {
-                    return res.status(401).json({ success: false, message: 'Not authenticated' });
+                    return res.status(401).json({ success: false, message: 'Not authenticated - no email in token' });
                 }
 
+                console.log('Looking up user by email:', userEmail);
                 const user = await this.authService.getUserByEmail(userEmail);
+                console.log("🚀 ~ AuthController ~ Found user:", user ? { id: user.id, email: user.email, name: user.name } : 'null');
 
                 if (!user) {
                     return res.status(404).json({ success: false, message: 'User not found' });
@@ -137,6 +147,41 @@ class AuthController {
                 res.status(500).json({
                     success: false,
                     error: 'Failed to fetch user profile',
+                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+                });
+            }
+        });
+
+        // Get user by email endpoint (Admin only)
+        app.get('/auth/user/:email', requireAdmin, async (req, res) => {
+            try {
+                const { email } = req.params;
+
+                if (!email || !email.includes('@')) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Valid email address is required'
+                    });
+                }
+
+                const user = await this.authService.getUserByEmail(email);
+
+                if (!user) {
+                    return res.status(404).json({
+                        success: false,
+                        message: 'User not found with this email'
+                    });
+                }
+
+                res.json({
+                    success: true,
+                    data: user
+                });
+            } catch (error) {
+                console.error('Get user by email error:', error);
+                res.status(500).json({
+                    success: false,
+                    error: 'Failed to fetch user by email',
                     message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
                 });
             }
