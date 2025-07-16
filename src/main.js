@@ -11,23 +11,35 @@ import { connectDB } from "./config/database.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables
+// Load environment variables FIRST
 const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.local';
 const envPath = path.resolve(__dirname, '..', envFile);
 
 console.log('Loading env file:', envPath);
-dotenv.config({ path: envPath });
+const envResult = dotenv.config({ path: envPath });
 
-// Debug: Verify environment variables
+if (envResult.error) {
+    console.warn('Warning: Could not load env file:', envResult.error.message);
+    // Try loading default .env file as fallback
+    dotenv.config();
+}
+
+// Debug: Verify critical environment variables are loaded
 console.log('Environment loaded:', {
     NODE_ENV: process.env.NODE_ENV,
+    PORT: process.env.PORT,
     FRONTEND_URL: process.env.FRONTEND_URL,
+    BACKEND_URL: process.env.BACKEND_URL,
+    hasJWT_SECRET: !!process.env.JWT_SECRET,
     hasGOOGLE_CLIENT_ID: !!process.env.GOOGLE_CLIENT_ID,
-    hasDB_PASSWORD: !!process.env.DB_PASSWORD
+    hasGOOGLE_CLIENT_SECRET: !!process.env.GOOGLE_CLIENT_SECRET,
+    hasDB_PASSWORD: !!process.env.DB_PASSWORD,
+    DB_HOST: process.env.DB_HOST,
+    DB_NAME: process.env.DB_NAME
 });
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 8000;
 
 // CORS configuration
 const allowedOrigins = [
@@ -68,5 +80,10 @@ AppModule(app);
 connectDB().then(() => {
     app.listen(port, () => {
         console.log(`Server is running on http://localhost:${port}`);
+        console.log(`Environment: ${process.env.NODE_ENV}`);
+        console.log(`Frontend URL: ${process.env.FRONTEND_URL}`);
     });
+}).catch(error => {
+    console.error('Failed to start server:', error);
+    process.exit(1);
 });

@@ -38,29 +38,43 @@ class AuthController {
             }
         });
 
-        // Google OAuth routes
-        app.get('/auth/google',
-            passport.authenticate('google', { scope: ['profile', 'email'] })
-        );
+        // Google OAuth routes (only if configured)
+        if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+            app.get('/auth/google',
+                passport.authenticate('google', { scope: ['profile', 'email'] })
+            );
 
-        app.get('/auth/google/callback',
-            passport.authenticate('google', { failureRedirect: `${process.env.FRONTEND_URL}/login?error=google_auth_failed` }),
-            (req, res) => {
-                try {
-                    // Generate JWT token
-                    const token = generateToken(req.user.email);
+            app.get('/auth/google/callback',
+                passport.authenticate('google', { failureRedirect: `${process.env.FRONTEND_URL}/login?error=google_auth_failed` }),
+                (req, res) => {
+                    try {
+                        // Generate JWT token
+                        const token = generateToken(req.user.email);
 
-                    // Redirect to frontend with token and minimal user data
-                    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}&user=${encodeURIComponent(JSON.stringify({
-                        id: req.user.id
-                    }))}`);
-                } catch (error) {
-                    console.error('Google callback error:', error);
-                    res.redirect(`${process.env.FRONTEND_URL}/login?error=token_generation_failed`);
+                        // Redirect to frontend with token and minimal user data
+                        res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}&user=${encodeURIComponent(JSON.stringify({
+                            id: req.user.id
+                        }))}`);
+                    } catch (error) {
+                        console.error('Google callback error:', error);
+                        res.redirect(`${process.env.FRONTEND_URL}/login?error=token_generation_failed`);
+                    }
                 }
-            }
-        );
+            );
+        } else {
+            // Fallback routes when Google OAuth is not configured
+            app.get('/auth/google', (req, res) => {
+                res.status(501).json({
+                    success: false,
+                    error: 'Google OAuth not configured',
+                    message: 'Google OAuth is not available on this server'
+                });
+            });
 
+            app.get('/auth/google/callback', (req, res) => {
+                res.redirect(`${process.env.FRONTEND_URL}/login?error=oauth_not_configured`);
+            });
+        }
 
         // Auth status endpoint
         app.get('/auth/status', async (req, res) => {
