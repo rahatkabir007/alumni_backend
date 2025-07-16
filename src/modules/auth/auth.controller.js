@@ -1,9 +1,7 @@
 import passport from 'passport';
-import jwt from 'jsonwebtoken';
 import { generateToken } from '../../utils/jwtSign.js';
 import { AuthService } from './auth.service.js';
 import { requireAdmin, roleMiddleware } from '../../middlewares/role.middleware.js';
-import { authMiddleware } from '../../middlewares/auth.middleware.js';
 
 class AuthController {
     constructor() {
@@ -11,7 +9,7 @@ class AuthController {
     }
 
     registerRoutes(app) {
-        // Email/Password Authentication Routes (JWT-based, no sessions)
+        // Email/Password Authentication Routes
         app.post('/auth/register', async (req, res) => {
             try {
                 const result = await this.authService.registerUser(req.body);
@@ -40,53 +38,59 @@ class AuthController {
             }
         });
 
-        // OAuth routes (session-based for flow completion, then JWT)
-        // Note: Sessions are only used temporarily during OAuth flow
-        // Final authentication uses JWT tokens
-        if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-            app.get('/auth/google',
-                passport.authenticate('google', { scope: ['profile', 'email'] })
-            );
+        // Google OAuth routes
+        app.get('/auth/google',
+            passport.authenticate('google', { scope: ['profile', 'email'] })
+        );
 
-            app.get('/auth/google/callback',
-                passport.authenticate('google', {
-                    failureRedirect: `${process.env.FRONTEND_URL}/login?error=google_auth_failed`
-                }),
-                (req, res) => {
-                    try {
-                        // Generate JWT token (replaces session-based auth)
-                        const token = generateToken(req.user.email);
+        app.get('/auth/google/callback',
+            passport.authenticate('google', { failureRedirect: `${process.env.FRONTEND_URL}/login?error=google_auth_failed` }),
+            (req, res) => {
+                try {
+                    // Generate JWT token
+                    const token = generateToken(req.user.email);
 
-                        // // Clear OAuth session after successful authentication
-                        // req.session.destroy((err) => {
-                        //     if (err) console.log('Session cleanup error:', err);
-                        // });
-
-                        // Redirect to frontend with JWT token
-                        res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}&user=${encodeURIComponent(JSON.stringify({
-                            id: req.user.id,
-                            email: req.user.email,
-                        }))}`);
-                    } catch (error) {
-                        console.error('Google callback error:', error);
-                        res.redirect(`${process.env.FRONTEND_URL}/login?error=token_generation_failed`);
-                    }
+                    // Redirect to frontend with token
+                    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}&user=${encodeURIComponent(JSON.stringify({
+                        id: req.user.id,
+                        email: req.user.email,
+                        name: req.user.name,
+                        provider: req.user.provider,
+                        roles: req.user.roles || ['user']
+                    }))}`);
+                } catch (error) {
+                    console.error('Google callback error:', error);
+                    res.redirect(`${process.env.FRONTEND_URL}/login?error=token_generation_failed`);
                 }
-            );
-        } else {
-            // Fallback routes when Google OAuth is not configured
-            app.get('/auth/google', (req, res) => {
-                res.status(501).json({
-                    success: false,
-                    error: 'Google OAuth not configured',
-                    message: 'Google OAuth is not available on this server'
-                });
-            });
+            }
+        );
 
-            app.get('/auth/google/callback', (req, res) => {
-                res.redirect(`${process.env.FRONTEND_URL}/login?error=oauth_not_configured`);
-            });
-        }
+        // Facebook OAuth routes
+        app.get('/auth/facebook',
+            passport.authenticate('facebook', { scope: ['email'] })
+        );
+
+        app.get('/auth/facebook/callback',
+            passport.authenticate('facebook', { failureRedirect: `${process.env.FRONTEND_URL}/login?error=facebook_auth_failed` }),
+            (req, res) => {
+                try {
+                    // Generate JWT token
+                    const token = generateToken(req.user.email);
+
+                    // Redirect to frontend with token
+                    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}&user=${encodeURIComponent(JSON.stringify({
+                        id: req.user.id,
+                        email: req.user.email,
+                        name: req.user.name,
+                        provider: req.user.provider,
+                        roles: req.user.roles || ['user']
+                    }))}`);
+                } catch (error) {
+                    console.error('Facebook callback error:', error);
+                    res.redirect(`${process.env.FRONTEND_URL}/login?error=token_generation_failed`);
+                }
+            }
+        );
 
         // Auth status endpoint
         app.get('/auth/status', async (req, res) => {
@@ -95,7 +99,11 @@ class AuthController {
                     res.json({
                         success: true,
                         user: {
-                            id: req.user.id
+                            id: req.user.id,
+                            email: req.user.email,
+                            name: req.user.name,
+                            provider: req.user.provider,
+                            roles: req.user.roles || ['user']
                         }
                     });
                 } else {
@@ -107,11 +115,9 @@ class AuthController {
             }
         });
 
-        // Get current user profile (protected route) - Apply auth middleware
-        app.get('/auth/me', authMiddleware, async (req, res) => {
+        // Get current user profile (protected route)
+        app.get('/auth/me', async (req, res) => {
             try {
-                console.log('Auth/me request user:', req.user);
-
                 // Extract email from JWT token
                 const userEmail = req.user?.email;
 
@@ -120,7 +126,6 @@ class AuthController {
                 }
 
                 const user = await this.authService.getUserByEmail(userEmail);
-                console.log("🚀 ~ AuthController ~ app.get ~ user:", user);
 
                 if (!user) {
                     return res.status(404).json({ success: false, message: 'User not found' });
@@ -137,6 +142,80 @@ class AuthController {
             }
         });
 
+        // Role management routes (Admin only)
+        app.put('/auth/users/:userId/roles', requireAdmin, async (req, res) => {
+            try {
+                const { userId } = req.params;
+                const { roles } = req.body;
+
+                if (!Array.isArray(roles) || roles.length === 0) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Roles must be a non-empty array'
+                    });
+                }
+
+                const validRoles = ['user', 'moderator', 'admin'];
+                const invalidRoles = roles.filter(role => !validRoles.includes(role));
+
+                if (invalidRoles.length > 0) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Invalid roles: ${invalidRoles.join(', ')}. Valid roles: ${validRoles.join(', ')}`
+                    });
+                }
+
+                const updatedUser = await this.authService.updateUserRoles(parseInt(userId), roles);
+                res.json({ success: true, data: updatedUser });
+            } catch (error) {
+                console.error('Update user roles error:', error);
+                res.status(500).json({
+                    success: false,
+                    error: 'Failed to update user roles',
+                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+                });
+            }
+        });
+
+        app.post('/auth/users/:userId/roles/:role', requireAdmin, async (req, res) => {
+            try {
+                const { userId, role } = req.params;
+
+                const validRoles = ['user', 'moderator', 'admin'];
+                if (!validRoles.includes(role)) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Invalid role: ${role}. Valid roles: ${validRoles.join(', ')}`
+                    });
+                }
+
+                const updatedUser = await this.authService.addRoleToUser(parseInt(userId), role);
+                res.json({ success: true, data: updatedUser });
+            } catch (error) {
+                console.error('Add role to user error:', error);
+                res.status(500).json({
+                    success: false,
+                    error: 'Failed to add role to user',
+                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+                });
+            }
+        });
+
+        app.delete('/auth/users/:userId/roles/:role', requireAdmin, async (req, res) => {
+            try {
+                const { userId, role } = req.params;
+
+                const updatedUser = await this.authService.removeRoleFromUser(parseInt(userId), role);
+                res.json({ success: true, data: updatedUser });
+            } catch (error) {
+                console.error('Remove role from user error:', error);
+                res.status(500).json({
+                    success: false,
+                    error: 'Failed to remove role from user',
+                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+                });
+            }
+        });
 
         // Logout endpoint
         app.post('/auth/logout', (req, res) => {
@@ -147,44 +226,6 @@ class AuthController {
                 timestamp: new Date().toISOString()
             });
         });
-
-        // Test JWT token endpoint (development only)
-        if (process.env.NODE_ENV === 'development') {
-            app.post('/auth/test-token', async (req, res) => {
-                try {
-                    const { email } = req.body;
-
-                    if (!email) {
-                        return res.status(400).json({
-                            success: false,
-                            error: 'Email required'
-                        });
-                    }
-
-                    const token = generateToken(email);
-
-                    // Immediately verify the token
-                    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-                    res.json({
-                        success: true,
-                        data: {
-                            token,
-                            decoded,
-                            secret_info: {
-                                length: process.env.JWT_SECRET?.length,
-                                preview: process.env.JWT_SECRET?.substring(0, 10) + '...'
-                            }
-                        }
-                    });
-                } catch (error) {
-                    res.status(500).json({
-                        success: false,
-                        error: error.message
-                    });
-                }
-            });
-        }
     }
 }
 
