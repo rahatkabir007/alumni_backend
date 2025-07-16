@@ -9,7 +9,7 @@ class AuthController {
     }
 
     registerRoutes(app) {
-        // Email/Password Authentication Routes
+        // Email/Password Authentication Routes (JWT-based, no sessions)
         app.post('/auth/register', async (req, res) => {
             try {
                 const result = await this.authService.registerUser(req.body);
@@ -38,20 +38,29 @@ class AuthController {
             }
         });
 
-        // Google OAuth routes (only if configured)
+        // OAuth routes (session-based for flow completion, then JWT)
+        // Note: Sessions are only used temporarily during OAuth flow
+        // Final authentication uses JWT tokens
         if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
             app.get('/auth/google',
                 passport.authenticate('google', { scope: ['profile', 'email'] })
             );
 
             app.get('/auth/google/callback',
-                passport.authenticate('google', { failureRedirect: `${process.env.FRONTEND_URL}/login?error=google_auth_failed` }),
+                passport.authenticate('google', {
+                    failureRedirect: `${process.env.FRONTEND_URL}/login?error=google_auth_failed`
+                }),
                 (req, res) => {
                     try {
-                        // Generate JWT token
+                        // Generate JWT token (replaces session-based auth)
                         const token = generateToken(req.user.email);
 
-                        // Redirect to frontend with token and minimal user data
+                        // Clear OAuth session after successful authentication
+                        req.session.destroy((err) => {
+                            if (err) console.log('Session cleanup error:', err);
+                        });
+
+                        // Redirect to frontend with JWT token
                         res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}&user=${encodeURIComponent(JSON.stringify({
                             id: req.user.id
                         }))}`);

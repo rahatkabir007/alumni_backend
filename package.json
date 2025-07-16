@@ -1,7 +1,7 @@
 {
   "name": "alumni_backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Alumni management system with JWT authentication and OAuth integration",
   "main": "main.js",
   "type": "module",
   "bin": {
@@ -9,13 +9,17 @@
   },
   "scripts": {
     "start": "node src/main.js",
-    "dev": "nodemon src/main.js",
+    "dev": "node src/main.js",
     "dev:local": "nodemon --env-file=.env.local src/main.js",
     "dev:prod": "nodemon --env-file=.env.production src/main.js",
     "test:prod-local": "node test-prod-local.js",
     "debug:env": "node -e \"console.log(process.env)\"",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint ."
+  },
+  "notes": {
+    "session-usage": "Sessions are only used for OAuth flow completion. Main authentication uses JWT tokens.",
+    "memory-store": "MemoryStore warning is expected as sessions are only used temporarily for OAuth flows."
   },
   "keywords": [],
   "author": "",
