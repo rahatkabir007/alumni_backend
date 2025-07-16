@@ -16,13 +16,14 @@ const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.en
 const envPath = path.resolve(__dirname, '..', envFile);
 
 console.log('Loading env file:', envPath);
-const envResult = dotenv.config({ path: envPath });
+dotenv.config({ path: envPath });
+// const envResult = dotenv.config({ path: envPath });
 
-if (envResult.error) {
-    console.warn('Warning: Could not load env file:', envResult.error.message);
-    // Try loading default .env file as fallback
-    dotenv.config();
-}
+// if (envResult.error) {
+//     console.warn('Warning: Could not load env file:', envResult.error.message);
+//     // Try loading default .env file as fallback
+//     dotenv.config();
+// }
 
 // Debug: Verify critical environment variables are loaded
 console.log('Environment loaded:', {
@@ -39,7 +40,7 @@ console.log('Environment loaded:', {
 });
 
 const app = express();
-const port = process.env.PORT || 8000;
+const port = process.env.PORT || 3000;
 
 // CORS configuration
 const allowedOrigins = [
