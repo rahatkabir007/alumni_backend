@@ -24,7 +24,7 @@ const AppModule = async (app) => {
     // Configure Passport after database connection
     configurePassport();
 
-    // CORS configuration
+    // In app.module.js, replace app.use(cors()) with:
     const corsOptions = {
         origin: function (origin, callback) {
             console.log('Request Origin:', origin); // Debug log
@@ -35,11 +35,9 @@ const AppModule = async (app) => {
             const allowedOrigins = [
                 process.env.FRONTEND_URL,
                 'http://localhost:3000',
-                'http://localhost:3001',
                 'http://localhost:5173',
                 'https://cisc-alumni-frontend.vercel.app',
                 'https://cihs-alumni.netlify.app',
-                'https://cihs-alumni.vercel.app',
                 'https://localhost:3000',
                 'https://localhost:5173',
             ].filter(Boolean);
@@ -61,34 +59,17 @@ const AppModule = async (app) => {
     app.use(cors(corsOptions));
     app.use(express.json());
 
-    // Configure session middleware with production-ready settings
-    const sessionConfig = {
-        secret: process.env.JWT_SECRET || 'fallback-secret-key',
+    // Session middleware for passport
+    app.use(session({
+        secret: process.env.JWT_SECRET,
         resave: false,
         saveUninitialized: false,
-        cookie: {
-            secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-            httpOnly: true, // Prevent XSS
-            maxAge: 24 * 60 * 60 * 1000, // 24 hours
-            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax' // For cross-origin in production
-        },
-        name: 'alumni.sid' // Custom session name
-    };
+        cookie: { secure: process.env.NODE_ENV === 'production' }
+    }));
 
-    // Only use sessions for OAuth routes that require them
-    const oauthSessionMiddleware = session(sessionConfig);
-
-    // Apply session middleware only to OAuth routes
-    app.use('/api/auth/google*', oauthSessionMiddleware);
-    app.use('/api/auth/facebook*', oauthSessionMiddleware);
-    app.use('/auth/google*', oauthSessionMiddleware);
-    app.use('/auth/facebook*', oauthSessionMiddleware);
-
-    // Passport middleware (only for OAuth routes)
-    app.use('/api/auth/google*', passport.initialize(), passport.session());
-    app.use('/api/auth/facebook*', passport.initialize(), passport.session());
-    app.use('/auth/google*', passport.initialize(), passport.session());
-    app.use('/auth/facebook*', passport.initialize(), passport.session());
+    // Passport middleware
+    app.use(passport.initialize());
+    app.use(passport.session());
 
     // Root level routes (non-API)
     const appService = new AppService();
@@ -102,7 +83,7 @@ const AppModule = async (app) => {
     await AuthModule(apiRouter); // Add OAuth routes
     await UsersModule(apiRouter);
 
-    // Apply auth middleware after OAuth routes (JWT-based auth for API routes)
+    // Apply auth middleware after OAuth routes
     apiRouter.use(authMiddleware);
 
     // Mount API router under /api prefix
