@@ -282,8 +282,10 @@ class UsersController {
                     });
                 }
 
+                console.log(email,)
+
                 // Get current user info to check permissions
-                const currentUser = await this.usersService.getUserByEmail(currentUserEmail);
+                const currentUser = await this.usersService.getUserByEmail(email);
                 if (!currentUser) {
                     return res.status(401).json({
                         success: false,
