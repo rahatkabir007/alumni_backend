@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt';
 import { getDataSource } from '../../config/database.js';
 import { User } from '../../entities/User.js';
 import { generateToken } from '../../utils/jwtSign.js';
+import { extractUserName, extractProfilePhoto, shouldUpdateProfilePhoto } from '../../helpers/oauth.helper.js';
 
 class AuthService {
     constructor() {
@@ -121,10 +122,18 @@ class AuthService {
                     hasUpdates = true;
                 }
 
-                // Update profile photo from OAuth provider if not set or update with latest
-                const newProfilePhoto = profile.photos?.[0]?.value || '';
-                if (newProfilePhoto && (!user.profilePhoto || user.profilePhoto === '')) {
+                // Enhanced profile photo logic using helper
+                const newProfilePhoto = extractProfilePhoto(profile);
+                if (newProfilePhoto && shouldUpdateProfilePhoto(user, newProfilePhoto, provider)) {
                     user.profilePhoto = newProfilePhoto;
+                    user.profilePhotoSource = provider;
+                    hasUpdates = true;
+                }
+
+                // Update name if it's empty or improve it using helper
+                const extractedName = extractUserName(profile);
+                if (extractedName && (!user.name || user.name.trim() === '')) {
+                    user.name = extractedName;
                     hasUpdates = true;
                 }
 
@@ -132,13 +141,15 @@ class AuthService {
                     user = await this.userRepository.save(user);
                 }
             } else {
-                // Create new user with default role and profile photo from OAuth
+                // Create new user with extracted and validated data using helpers
+                const profilePhoto = extractProfilePhoto(profile);
                 const userData = {
                     email: email,
-                    name: profile.displayName || `${profile.name?.givenName || ''} ${profile.name?.familyName || ''}`.trim(),
-                    profilePhoto: profile.photos?.[0]?.value || '', // Set profile photo from OAuth
+                    name: extractUserName(profile),
+                    profilePhoto: profilePhoto,
+                    profilePhotoSource: profilePhoto ? provider : null,
                     provider: provider,
-                    roles: ['user'], // Default role as array
+                    roles: ['user'],
                 };
 
                 if (provider === 'google') {
@@ -150,10 +161,11 @@ class AuthService {
                 user = this.userRepository.create(userData);
                 user = await this.userRepository.save(user);
 
-                console.log(`New ${provider} user created with profile photo:`, {
+                console.log(`New ${provider} user created:`, {
                     email: user.email,
                     name: user.name,
-                    profilePhoto: user.profilePhoto
+                    profilePhoto: user.profilePhoto,
+                    profilePhotoSource: user.profilePhotoSource
                 });
             }
 

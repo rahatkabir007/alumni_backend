@@ -61,28 +61,6 @@ class AuthController {
             }
         );
 
-        // Facebook OAuth routes
-        app.get('/auth/facebook',
-            passport.authenticate('facebook', { scope: ['email'] })
-        );
-
-        app.get('/auth/facebook/callback',
-            passport.authenticate('facebook', { failureRedirect: `${process.env.FRONTEND_URL}/login?error=facebook_auth_failed` }),
-            (req, res) => {
-                try {
-                    // Generate JWT token
-                    const token = generateToken(req.user.email);
-
-                    // Redirect to frontend with token and minimal user data
-                    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}&user=${encodeURIComponent(JSON.stringify({
-                        id: req.user.id
-                    }))}`);
-                } catch (error) {
-                    console.error('Facebook callback error:', error);
-                    res.redirect(`${process.env.FRONTEND_URL}/login?error=token_generation_failed`);
-                }
-            }
-        );
 
         // Auth status endpoint
         app.get('/auth/status', async (req, res) => {

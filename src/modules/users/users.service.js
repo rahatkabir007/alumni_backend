@@ -1,6 +1,7 @@
 import { getDataSource } from "../../config/database.js";
 import { User } from "../../entities/User.js";
 import { Like, In } from "typeorm";
+import { sanitizeName, validateProfilePhoto } from "../../helpers/validation.helper.js";
 
 class UsersService {
     constructor() {
@@ -207,7 +208,15 @@ class UsersService {
 
             allowedFields.forEach(field => {
                 if (updateData[field] !== undefined) {
-                    filteredData[field] = updateData[field];
+                    if (field === 'name') {
+                        filteredData[field] = sanitizeName(updateData[field]);
+                    } else if (field === 'profilePhoto') {
+                        filteredData[field] = validateProfilePhoto(updateData[field]);
+                        // Mark profile photo as manually set when updated through this method
+                        filteredData.profilePhotoSource = 'manual';
+                    } else {
+                        filteredData[field] = updateData[field];
+                    }
                 }
             });
 
@@ -238,16 +247,17 @@ class UsersService {
 
             allowedFields.forEach(field => {
                 if (updateData[field] !== undefined) {
-                    filteredData[field] = updateData[field];
+                    if (field === 'name') {
+                        filteredData[field] = sanitizeName(updateData[field]);
+                    } else if (field === 'profilePhoto') {
+                        filteredData[field] = validateProfilePhoto(updateData[field]);
+                        // Mark profile photo as manually set when updated by user
+                        filteredData.profilePhotoSource = 'manual';
+                    } else {
+                        filteredData[field] = updateData[field];
+                    }
                 }
             });
-
-            // Validate profilePhoto URL format if provided
-            if (filteredData.profilePhoto !== undefined) {
-                if (filteredData.profilePhoto && !this.isValidUrl(filteredData.profilePhoto)) {
-                    throw new Error('Invalid profile photo URL format');
-                }
-            }
 
             Object.assign(user, filteredData);
             const updatedUser = await this.userRepository.save(user);
@@ -257,6 +267,65 @@ class UsersService {
         } catch (error) {
             console.error('Update current user error:', error);
             throw error;
+        }
+    }
+
+    // Helper method to sanitize and validate names
+    sanitizeName(name) {
+        if (!name || typeof name !== 'string') {
+            throw new Error('Name must be a non-empty string');
+        }
+
+        // Remove extra whitespace and limit length
+        const sanitized = name.replace(/\s+/g, ' ').trim();
+
+        if (sanitized.length === 0) {
+            throw new Error('Name cannot be empty');
+        }
+
+        if (sanitized.length > 100) {
+            throw new Error('Name cannot exceed 100 characters');
+        }
+
+        // Check for potentially harmful characters (basic XSS prevention)
+        if (/<script|javascript:|on\w+=/i.test(sanitized)) {
+            throw new Error('Name contains invalid characters');
+        }
+
+        return sanitized;
+    }
+
+    // Helper method to validate profile photo URLs
+    validateProfilePhoto(photoUrl) {
+        if (!photoUrl) {
+            return ''; // Allow empty string
+        }
+
+        if (typeof photoUrl !== 'string') {
+            throw new Error('Profile photo must be a valid URL string');
+        }
+
+        // Validate URL format
+        if (!this.isValidUrl(photoUrl)) {
+            throw new Error('Invalid profile photo URL format');
+        }
+
+        // Check URL length
+        if (photoUrl.length > 500) {
+            throw new Error('Profile photo URL cannot exceed 500 characters');
+        }
+
+        return photoUrl;
+    }
+
+    // Helper method to validate URL format (enhanced)
+    isValidUrl(string) {
+        try {
+            const url = new URL(string);
+            // Only allow http and https protocols
+            return url.protocol === 'http:' || url.protocol === 'https:';
+        } catch (_) {
+            return false;
         }
     }
 
@@ -296,16 +365,6 @@ class UsersService {
         } catch (error) {
             console.error('Bulk delete users error:', error);
             throw error;
-        }
-    }
-
-    // Helper method to validate URL format
-    isValidUrl(string) {
-        try {
-            new URL(string);
-            return true;
-        } catch (_) {
-            return false;
         }
     }
 

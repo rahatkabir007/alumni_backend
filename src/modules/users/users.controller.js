@@ -1,5 +1,6 @@
 import { authMiddleware } from "../../middlewares/auth.middleware.js";
-import { requireAdmin } from "../../middlewares/role.middleware.js";
+import { requireAdmin, roleMiddleware } from "../../middlewares/role.middleware.js";
+import { getUserInfoFromToken, validateUserId, canAccessUser } from "../../helpers/auth.helper.js";
 
 class UsersController {
     constructor(usersService) {
@@ -10,7 +11,6 @@ class UsersController {
         // Health check endpoint (public)
         app.get('/health', async (req, res) => {
             try {
-                // Test database connection
                 await this.usersService.getUserStats();
                 res.json({
                     success: true,
@@ -27,85 +27,32 @@ class UsersController {
             }
         });
 
-        // User self-update endpoint (protected - users can update their own profile)
-        app.put('/users/me', authMiddleware, async (req, res) => {
-            try {
-                const userEmail = req.user?.email;
-
-                if (!userEmail) {
-                    return res.status(401).json({
-                        success: false,
-                        message: 'Not authenticated'
-                    });
-                }
-
-                const result = await this.usersService.updateCurrentUser(userEmail, req.body);
-                res.json({
-                    success: true,
-                    data: result,
-                    message: 'Profile updated successfully'
-                });
-            } catch (error) {
-                console.error('Update current user error:', error);
-
-                if (error.message === 'User not found') {
-                    return res.status(404).json({
-                        success: false,
-                        error: 'User not found'
-                    });
-                }
-
-                if (error.message === 'Invalid profile photo URL format') {
-                    return res.status(400).json({
-                        success: false,
-                        error: 'Invalid profile photo URL format'
-                    });
-                }
-
-                res.status(500).json({
-                    success: false,
-                    error: 'Failed to update profile',
-                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-                });
-            }
-        });
-
-        // Admin-only: Get all users with pagination, search, and filtering
+        // Get users with advanced filtering, search, pagination, and stats
+        // Supports: ?search=john&role=admin&stats=true&page=1&limit=10&sortBy=created_at&sortOrder=desc
         app.get('/users', requireAdmin, async (req, res) => {
             try {
                 const {
                     page = 1,
                     limit = 10,
                     search = '',
-                    status = 'all',
                     role = 'all',
                     sortBy = 'created_at',
-                    sortOrder = 'desc'
+                    sortOrder = 'desc',
+                    stats = 'false' // Include stats in response
                 } = req.query;
-
-                // Debug logging
-                console.log('Users query parameters:', {
-                    page: parseInt(page),
-                    limit: parseInt(limit),
-                    search,
-                    status,
-                    role,
-                    sortBy,
-                    sortOrder
-                });
 
                 const options = {
                     page: parseInt(page),
                     limit: parseInt(limit),
                     search: search?.trim() || '',
-                    status,
                     role: role?.trim() || 'all',
                     sortBy,
-                    sortOrder
+                    sortOrder,
+                    includeStats: stats === 'true'
                 };
 
-                // Validate sortBy field
-                const validSortFields = ['id', 'name', 'email', 'createdAt', 'updatedAt', 'created_at', 'updated_at'];
+                // Validate parameters
+                const validSortFields = ['id', 'name', 'email', 'created_at', 'updated_at'];
                 if (!validSortFields.includes(options.sortBy)) {
                     return res.status(400).json({
                         success: false,
@@ -113,16 +60,14 @@ class UsersController {
                     });
                 }
 
-                // Validate sortOrder
-                const validSortOrders = ['asc', 'desc', 'ASC', 'DESC'];
-                if (!validSortOrders.includes(options.sortOrder)) {
+                const validSortOrders = ['asc', 'desc'];
+                if (!validSortOrders.includes(options.sortOrder.toLowerCase())) {
                     return res.status(400).json({
                         success: false,
                         error: 'Invalid sortOrder. Must be "asc" or "desc"'
                     });
                 }
 
-                // Validate role filter
                 const validRoles = ['all', 'user', 'admin', 'moderator'];
                 if (!validRoles.includes(options.role)) {
                     return res.status(400).json({
@@ -132,13 +77,6 @@ class UsersController {
                 }
 
                 const result = await this.usersService.getUsers(options);
-
-                console.log('Users query result:', {
-                    total: result.total,
-                    usersCount: result.users.length,
-                    currentPage: result.currentPage
-                });
-
                 res.json({ success: true, data: result });
             } catch (error) {
                 console.error('Get users error:', error);
@@ -150,230 +88,249 @@ class UsersController {
             }
         });
 
-        // Admin-only: Get user statistics
-        app.get('/users/stats', requireAdmin, async (req, res) => {
-            try {
-                const result = await this.usersService.getUserStats();
-                res.json({ success: true, data: result });
-            } catch (error) {
-                console.error('Get user stats error:', error);
-                res.status(500).json({
-                    success: false,
-                    error: 'Failed to fetch user statistics',
-                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-                });
-            }
-        });
+        // Get or update specific user by ID (supports both GET and PUT)
+        // GET /users/123 - get user by ID
+        // PUT /users/123 - update user by ID
+        // Special case: /users/me resolves to current user's ID
+        app.route('/users/:id')
+            .get(this.handleUserAccess.bind(this), async (req, res) => {
+                try {
+                    const userId = req.resolvedUserId;
+                    const result = await this.usersService.getUserById(userId);
 
-        // Admin-only: Search users
-        app.get('/users/search', requireAdmin, async (req, res) => {
-            try {
-                const { q: query, limit = 10 } = req.query;
-
-                if (!query) {
-                    return res.status(400).json({
+                    if (!result) {
+                        return res.status(404).json({
+                            success: false,
+                            error: 'User not found'
+                        });
+                    }
+                    res.json({ success: true, data: result });
+                } catch (error) {
+                    console.error('Get user by ID error:', error);
+                    res.status(500).json({
                         success: false,
-                        error: 'Search query is required'
+                        error: 'Failed to fetch user',
+                        message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
                     });
                 }
+            })
+            .put(this.handleUserAccess.bind(this), async (req, res) => {
+                try {
+                    const userId = req.resolvedUserId;
+                    const isCurrentUser = req.isCurrentUser;
 
-                const result = await this.usersService.searchUsers(query, parseInt(limit));
-                res.json({ success: true, data: result });
-            } catch (error) {
-                console.error('Search users error:', error);
-                res.status(500).json({
-                    success: false,
-                    error: 'Failed to search users',
-                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-                });
-            }
-        });
+                    // If updating own profile, use updateCurrentUser (limited fields)
+                    // If admin updating any user, use updateUser (all fields)
+                    const result = isCurrentUser
+                        ? await this.usersService.updateCurrentUser(req.user.email, req.body)
+                        : await this.usersService.updateUser(userId, req.body);
 
-        // Admin-only: Bulk update users
-        app.patch('/users/bulk-update', requireAdmin, async (req, res) => {
-            try {
-                const { userIds, updateData } = req.body;
+                    res.json({
+                        success: true,
+                        data: result,
+                        message: 'User updated successfully'
+                    });
+                } catch (error) {
+                    console.error('Update user error:', error);
 
-                if (!Array.isArray(userIds) || userIds.length === 0) {
-                    return res.status(400).json({
+                    if (error.message === 'User not found') {
+                        return res.status(404).json({
+                            success: false,
+                            error: 'User not found'
+                        });
+                    }
+
+                    if (error.message === 'Invalid profile photo URL format') {
+                        return res.status(400).json({
+                            success: false,
+                            error: 'Invalid profile photo URL format'
+                        });
+                    }
+
+                    res.status(500).json({
                         success: false,
-                        error: 'User IDs array is required and cannot be empty'
+                        error: 'Failed to update user',
+                        message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
                     });
                 }
+            })
+            .delete(requireAdmin, async (req, res) => {
+                try {
+                    const userId = req.params.id === 'me'
+                        ? (await this.getUserIdFromToken(req)).userId
+                        : parseInt(req.params.id);
 
-                if (!updateData || Object.keys(updateData).length === 0) {
-                    return res.status(400).json({
-                        success: false,
-                        error: 'Update data is required'
-                    });
-                }
+                    if (isNaN(userId)) {
+                        return res.status(400).json({
+                            success: false,
+                            error: 'Invalid user ID'
+                        });
+                    }
 
-                const result = await this.usersService.bulkUpdateUsers(userIds, updateData);
-                res.json({
-                    success: true,
-                    data: result,
-                    message: `Successfully updated ${result.affected} users`
-                });
-            } catch (error) {
-                console.error('Bulk update users error:', error);
-                res.status(500).json({
-                    success: false,
-                    error: 'Failed to bulk update users',
-                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-                });
-            }
-        });
-
-        // Admin-only: Bulk delete users
-        app.delete('/users/bulk-delete', requireAdmin, async (req, res) => {
-            try {
-                const { userIds } = req.body;
-
-                if (!Array.isArray(userIds) || userIds.length === 0) {
-                    return res.status(400).json({
-                        success: false,
-                        error: 'User IDs array is required and cannot be empty'
-                    });
-                }
-
-                // Prevent admin from deleting themselves
-                const currentUserEmail = req.user?.email;
-                if (currentUserEmail) {
-                    const currentUser = await this.usersService.getUserByEmail(currentUserEmail);
-                    if (currentUser && userIds.includes(currentUser.id)) {
+                    // Prevent admin from deleting themselves
+                    const currentUser = await this.getUserIdFromToken(req);
+                    if (currentUser.userId === userId) {
                         return res.status(400).json({
                             success: false,
                             error: 'You cannot delete your own account'
                         });
                     }
-                }
 
-                const result = await this.usersService.bulkDeleteUsers(userIds);
-                res.json({
-                    success: true,
-                    data: result,
-                    message: `Successfully deleted ${result.affected} users`
-                });
-            } catch (error) {
-                console.error('Bulk delete users error:', error);
-                res.status(500).json({
-                    success: false,
-                    error: 'Failed to bulk delete users',
-                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-                });
-            }
-        });
+                    const result = await this.usersService.deleteUser(userId);
+                    if (!result) {
+                        return res.status(404).json({
+                            success: false,
+                            error: 'User not found'
+                        });
+                    }
 
-        app.get('/users/:id', requireAdmin, async (req, res) => {
-            try {
-                const userId = parseInt(req.params.id);
-
-                if (isNaN(userId)) {
-                    return res.status(400).json({
+                    res.json({
+                        success: true,
+                        message: 'User deleted successfully'
+                    });
+                } catch (error) {
+                    console.error('Delete user error:', error);
+                    res.status(500).json({
                         success: false,
-                        error: 'Invalid user ID'
+                        error: 'Failed to delete user',
+                        message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
                     });
                 }
+            });
 
-                const result = await this.usersService.getUserById(userId);
-                if (!result) {
-                    return res.status(404).json({
+        // Bulk operations for users (admin only)
+        app.route('/users/bulk')
+            .patch(requireAdmin, async (req, res) => {
+                try {
+                    const { userIds, updateData } = req.body;
+
+                    if (!Array.isArray(userIds) || userIds.length === 0) {
+                        return res.status(400).json({
+                            success: false,
+                            error: 'User IDs array is required and cannot be empty'
+                        });
+                    }
+
+                    if (!updateData || Object.keys(updateData).length === 0) {
+                        return res.status(400).json({
+                            success: false,
+                            error: 'Update data is required'
+                        });
+                    }
+
+                    const result = await this.usersService.bulkUpdateUsers(userIds, updateData);
+                    res.json({
+                        success: true,
+                        data: result,
+                        message: `Successfully updated ${result.affected} users`
+                    });
+                } catch (error) {
+                    console.error('Bulk update users error:', error);
+                    res.status(500).json({
                         success: false,
-                        error: 'User not found'
+                        error: 'Failed to bulk update users',
+                        message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
                     });
                 }
-                res.json({ success: true, data: result });
-            } catch (error) {
-                console.error('Get user by ID error:', error);
-                res.status(500).json({
-                    success: false,
-                    error: 'Failed to fetch user',
-                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-                });
-            }
-        });
+            })
+            .delete(requireAdmin, async (req, res) => {
+                try {
+                    const { userIds } = req.body;
 
-        // Admin-only: Update user by ID
-        app.put('/users/:id', requireAdmin, async (req, res) => {
-            try {
-                const userId = parseInt(req.params.id);
+                    if (!Array.isArray(userIds) || userIds.length === 0) {
+                        return res.status(400).json({
+                            success: false,
+                            error: 'User IDs array is required and cannot be empty'
+                        });
+                    }
 
-                if (isNaN(userId)) {
-                    return res.status(400).json({
-                        success: false,
-                        error: 'Invalid user ID'
-                    });
-                }
-
-                const result = await this.usersService.updateUser(userId, req.body);
-                res.json({
-                    success: true,
-                    data: result,
-                    message: 'User updated successfully'
-                });
-            } catch (error) {
-                console.error('Update user error:', error);
-
-                if (error.message === 'User not found') {
-                    return res.status(404).json({
-                        success: false,
-                        error: 'User not found'
-                    });
-                }
-
-                res.status(500).json({
-                    success: false,
-                    error: 'Failed to update user',
-                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-                });
-            }
-        });
-
-        // Admin-only: Delete user by ID
-        app.delete('/users/:id', requireAdmin, async (req, res) => {
-            try {
-                const userId = parseInt(req.params.id);
-
-                if (isNaN(userId)) {
-                    return res.status(400).json({
-                        success: false,
-                        error: 'Invalid user ID'
-                    });
-                }
-
-                // Prevent admin from deleting themselves
-                const currentUserEmail = req.user?.email;
-                if (currentUserEmail) {
-                    const currentUser = await this.usersService.getUserByEmail(currentUserEmail);
-
-                    if (currentUser && currentUser.id === userId) {
+                    // Prevent admin from deleting themselves
+                    const currentUser = await this.getUserIdFromToken(req);
+                    if (userIds.includes(currentUser.userId)) {
                         return res.status(400).json({
                             success: false,
                             error: 'You cannot delete your own account'
                         });
                     }
-                }
 
-                const result = await this.usersService.deleteUser(userId);
-                if (!result) {
-                    return res.status(404).json({
+                    const result = await this.usersService.bulkDeleteUsers(userIds);
+                    res.json({
+                        success: true,
+                        data: result,
+                        message: `Successfully deleted ${result.affected} users`
+                    });
+                } catch (error) {
+                    console.error('Bulk delete users error:', error);
+                    res.status(500).json({
                         success: false,
-                        error: 'User not found'
+                        error: 'Failed to bulk delete users',
+                        message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
                     });
                 }
-                res.json({
-                    success: true,
-                    message: 'User deleted successfully'
-                });
-            } catch (error) {
-                console.error('Delete user error:', error);
-                res.status(500).json({
+            });
+    }
+
+    // Middleware to handle user access control and resolve "me" to actual user ID
+    async handleUserAccess(req, res, next) {
+        try {
+            const paramId = req.params.id;
+
+            // Handle "me" special case
+            if (paramId === 'me') {
+                const userInfo = await getUserInfoFromToken(req, this.usersService);
+                req.resolvedUserId = userInfo.userId;
+                req.isCurrentUser = true;
+                return next();
+            }
+
+            // Handle numeric ID
+            const userId = validateUserId(paramId);
+
+            // Check if user is accessing their own profile or is admin
+            const currentUser = await getUserInfoFromToken(req, this.usersService);
+            const isCurrentUser = currentUser.userId === userId;
+            const hasAccess = canAccessUser(userId, currentUser.userId, currentUser.roles);
+
+            if (!hasAccess) {
+                return res.status(403).json({
                     success: false,
-                    error: 'Failed to delete user',
-                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+                    error: 'Access denied. You can only access your own profile or need admin privileges.'
                 });
             }
-        });
+
+            req.resolvedUserId = userId;
+            req.isCurrentUser = isCurrentUser;
+            next();
+        } catch (error) {
+            console.error('Handle user access error:', error);
+            return res.status(401).json({
+                success: false,
+                error: 'Authentication required'
+            });
+        }
+    }
+
+    // Helper method to extract user info from JWT token
+    async getUserIdFromToken(req) {
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            throw new Error('Access token required');
+        }
+
+        const token = authHeader.substring(7);
+        const jwt = await import('jsonwebtoken');
+        const decoded = jwt.default.verify(token, process.env.JWT_SECRET);
+
+        const user = await this.usersService.getUserByEmail(decoded.email);
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        return {
+            userId: user.id,
+            email: user.email,
+            roles: user.roles || ['user']
+        };
     }
 }
 
