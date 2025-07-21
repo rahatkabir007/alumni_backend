@@ -47,7 +47,6 @@ class AuthController {
         })
 
 
-
         app.get('/auth/me', authMiddleware, async (req, res) => {
             try {
                 const user = req.user;
