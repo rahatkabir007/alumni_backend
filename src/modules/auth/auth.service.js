@@ -57,6 +57,16 @@ class AuthService {
                 throw new Error('User not found');
             }
 
+            // Check if user registered with OAuth provider and has no password
+            if (!user.password && user.provider && user.provider !== 'email') {
+                throw new Error(`This email is registered with ${user.provider}. Please login using ${user.provider} instead.`);
+            }
+
+            // Check if user has no password but provider is email (edge case)
+            if (!user.password) {
+                throw new Error('Account setup incomplete. Please reset your password or contact support.');
+            }
+
             const isPasswordValid = await bcrypt.compare(password, user.password);
             if (!isPasswordValid) {
                 throw new Error('Invalid password');
@@ -109,18 +119,29 @@ class AuthService {
             });
 
             if (user) {
-                // Update provider info if user exists
-                if (provider === 'google' && !user.googleId) {
-                    user.googleId = profile.id;
+                // If user exists but was registered with email/password
+                if (user.provider === 'email' && user.password) {
+                    // Allow linking OAuth account to existing email account
+                    if (provider === 'google' && !user.googleId) {
+                        user.googleId = profile.id;
+                        // Optionally update provider to indicate OAuth is also available
+                        user.provider = 'email,google'; // Or keep as 'email'
+                    }
+                    user = await this.userRepository.save(user);
+                } else {
+                    // Update provider info if user exists with OAuth
+                    if (provider === 'google' && !user.googleId) {
+                        user.googleId = profile.id;
+                    }
+                    user = await this.userRepository.save(user);
                 }
-                user = await this.userRepository.save(user);
             } else {
-                // Create new user with default role
+                // Create new user with OAuth
                 const userData = {
                     email: email,
                     name: profile.displayName || `${profile.name?.givenName || ''} ${profile.name?.familyName || ''}`.trim(),
                     provider: provider,
-                    roles: ['user'], // Default role as array
+                    roles: ['user'],
                 };
 
                 if (provider === 'google') {
@@ -149,8 +170,8 @@ class AuthService {
             });
 
             if (user) {
-                const { password, ...userWithoutPassword } = user;
-                return userWithoutPassword;
+                const { email, roles, id } = user;
+                return { email, roles, id };
             }
             return null;
         } catch (error) {
