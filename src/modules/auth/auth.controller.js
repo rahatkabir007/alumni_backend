@@ -5,6 +5,8 @@ import { AuthService } from './auth.service.js';
 import { requireAdmin, roleMiddleware } from '../../middlewares/role.middleware.js';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
 import { tokenBlacklist } from '../../utils/tokenBlacklist.js';
+import { ResponseHandler } from '../../utils/responseHandler.js';
+import { asyncHandler } from '../../utils/asyncHandler.js';
 
 class AuthController {
     constructor() {
@@ -13,85 +15,58 @@ class AuthController {
 
     registerRoutes(app) {
         // Email/Password Authentication Routes
-        app.post('/auth/register', async (req, res) => {
+        app.post('/auth/register', asyncHandler(async (req, res) => {
+            const result = await this.authService.registerUser(req.body);
+            return ResponseHandler.created(res, result, 'User registered successfully');
+        }));
 
-            try {
-                const result = await this.authService.registerUser(req.body);
-                res.status(201).json({ success: true, data: result });
-            } catch (error) {
-                res.status(400).json({
-                    success: false,
-                    error: 'Registration failed',
-                    message: process.env.NODE_ENV === 'development' ? error.message : 'Registration failed'
-                });
+        app.post('/auth/login', asyncHandler(async (req, res) => {
+            const { email, password } = req.body;
+
+            if (!email || !password) {
+                return ResponseHandler.error(res,
+                    new Error('Email and password are required'),
+                    'Email and password are required'
+                );
             }
-        });
 
-        app.post('/auth/login', authMiddleware, async (req, res) => {
-            try {
-                const { email, password } = req.body;
-                if (!email || !password) {
-                    return res.status(400).json({
-                        success: false,
-                        error: 'Email and password are required'
-                    });
-                }
-                const user = await this.authService.loginUser(email, password);
-                res.status(200).json({ success: true, data: user });
-            } catch (error) {
-                res.status(400).json({
-                    success: false,
-                    error: 'Login failed',
-                    message: process.env.NODE_ENV === 'development' ? error.message : 'Login failed'
-                });
-            }
-        })
+            const user = await this.authService.loginUser(email, password);
+            return ResponseHandler.success(res, user, 'Login successful');
+        }));
 
-        app.post('/auth/logout', authMiddleware, async (req, res) => {
-            try {
-                // Add token to blacklist
-                const token = req.token;
-                console.log("🚀 ~ AuthController ~ app.post ~ token:", token)
-                if (token) {
-                    tokenBlacklist.addToken(token);
-                    console.log('Token blacklisted successfully');
+        app.post('/auth/login/google',
+            passport.authenticate('google-token', { session: false }),
+            asyncHandler(async (req, res) => {
+                if (!req.user) {
+                    return ResponseHandler.unauthorized(res, 'Google authentication failed');
                 }
 
-                res.status(200).json({
-                    success: true,
-                    message: 'Logged out successfully'
-                });
-            } catch (error) {
-                res.status(500).json({
-                    success: false,
-                    error: 'Logout failed',
-                    message: process.env.NODE_ENV === 'development' ? error.message : 'Logout failed'
-                });
+                const user = await this.authService.loginWithGoogle(req.user);
+                return ResponseHandler.success(res, user, 'Google login successful');
+            })
+        );
+
+        app.post('/auth/logout', authMiddleware, asyncHandler(async (req, res) => {
+            const token = req.token;
+
+            if (token) {
+                tokenBlacklist.addToken(token);
+                console.log('Token blacklisted successfully');
             }
-        });
 
+            return ResponseHandler.success(res, null, 'Logged out successfully');
+        }));
 
-        app.get('/auth/me', authMiddleware, async (req, res) => {
-            try {
-                const user = req.user;
-                if (!user) {
-                    return res.status(401).json({
-                        success: false,
-                        error: 'User not authenticated'
-                    });
-                }
-                const userData = await this.authService.getAuthenticatedUserData(user);
-                res.status(200).json({ success: true, data: userData });
+        app.get('/auth/me', authMiddleware, asyncHandler(async (req, res) => {
+            const user = req.user;
 
-            } catch (error) {
-                res.status(500).json({
-                    success: false,
-                    error: 'Failed to fetch user',
-                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-                });
+            if (!user) {
+                return ResponseHandler.unauthorized(res, 'User not authenticated');
             }
-        });
 
+            const userData = await this.authService.getAuthenticatedUserData(user);
+            return ResponseHandler.success(res, userData, 'User data retrieved successfully');
+        }));
     }
 }
 
