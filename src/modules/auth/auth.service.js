@@ -16,8 +16,6 @@ class AuthService {
 
     async registerUser(userData) {
         try {
-            console.log('Registration attempt for:', userData.email);
-
             // Check if user already exists
             const existingUser = await this.userRepository.findOne({
                 where: { email: userData.email }
@@ -33,18 +31,16 @@ class AuthService {
                 email: userData.email,
                 password: hashedPassword,
                 name: userData.name,
-                roles: ['user'], // Default role as array
+                roles: ['user'],
                 provider: 'email'
             });
 
             const savedUser = await this.userRepository.save(user);
-            const { password, ...userWithoutPassword } = savedUser;
+            const { email, roles, id } = savedUser;
 
-            // Generate token for immediate login after registration
-            const token = generateToken(savedUser.email);
+            const userWithoutPassword = { email, roles, id };
 
-            console.log('User registered successfully:', userWithoutPassword.email);
-            return { user: userWithoutPassword, token };
+            return { user: userWithoutPassword };
         } catch (error) {
             console.error('Registration error in service:', error);
             throw error;

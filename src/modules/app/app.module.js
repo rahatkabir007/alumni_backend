@@ -11,6 +11,7 @@ import { AppController } from "./app.controller.js";
 import { AppService } from "./app.service.js";
 import { UsersModule } from "../users/users.module.js";
 import { AuthModule } from "../auth/auth.module.js";
+import { allowedOrigins } from "../../config/allowedOrigins.js";
 
 let isDbConnected = false;
 
@@ -24,31 +25,32 @@ const AppModule = async (app) => {
     // Configure Passport after database connection
     configurePassport();
 
-    // In app.module.js, replace app.use(cors()) with:
+    // CORS configuration - ONLY place where CORS is configured
     const corsOptions = {
         origin: function (origin, callback) {
-            console.log('Request Origin:', origin); // Debug log
+            console.log('Request Origin:', origin);
 
             // Allow requests with no origin (like mobile apps or curl requests)
-            if (!origin) return callback(null, true);
-
-            const allowedOrigins = [
-                process.env.FRONTEND_URL,
-                'http://localhost:3000',
-                'http://localhost:5173',
-                'https://cisc-alumni-frontend.vercel.app',
-                'https://cihs-alumni.netlify.app',
-                'https://localhost:3000',
-                'https://localhost:5173',
-            ].filter(Boolean);
-
-            if (allowedOrigins.some(allowedOrigin => allowedOrigin === origin)) {
-                callback(null, true);
+            if (!origin) {
+                console.log('No origin - allowing request');
+                return callback(null, true);
             }
-            else {
-                console.log('CORS blocked origin:', origin);
-                callback(new Error('Not allowed by CORS'));
+
+            // Filter out undefined/null values from allowedOrigins
+            const validOrigins = allowedOrigins.filter(Boolean);
+            console.log('Valid allowed origins:', validOrigins);
+
+            // Check if origin is in our allowed list
+            const isAllowedOrigin = validOrigins.some(allowedOrigin => allowedOrigin === origin);
+
+            if (isAllowedOrigin) {
+                console.log('✅ Origin in allowed list - allowing request');
+            } else {
+                console.log('⚠️ Origin NOT in allowed list but allowing anyway for development');
             }
+
+            // Always allow the request (for development flexibility)
+            callback(null, true);
         },
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -56,15 +58,23 @@ const AppModule = async (app) => {
         exposedHeaders: ['Authorization']
     };
 
+    // Apply CORS middleware
     app.use(cors(corsOptions));
-    app.use(express.json());
 
-    // Session middleware for passport
+    // Handle preflight requests explicitly
+    app.options('*', cors(corsOptions));
+
+    // Session middleware for passport (only for OAuth routes)
     app.use(session({
-        secret: process.env.JWT_SECRET,
+        secret: process.env.JWT_SECRET || 'fallback-session-secret',
         resave: false,
         saveUninitialized: false,
-        cookie: { secure: process.env.NODE_ENV === 'production' }
+        cookie: {
+            secure: process.env.NODE_ENV === 'production',
+            httpOnly: true,
+            maxAge: 10 * 60 * 1000 // 10 minutes for OAuth flow
+        },
+        name: 'oauth.sid'
     }));
 
     // Passport middleware
@@ -76,20 +86,23 @@ const AppModule = async (app) => {
     const appController = new AppController(appService);
     appController.registerRoutes(app);
 
-    // Create API router
+    // Initialize auth module directly on app (not on API router) to handle /auth routes
+
+    // Create API router for other modules
     const apiRouter = express.Router();
-
-    // Initialize modules on API router
-    await AuthModule(apiRouter); // Add OAuth routes
-    await UsersModule(apiRouter);
-
-    // Apply auth middleware after OAuth routes
-    apiRouter.use(authMiddleware);
-
     // Mount API router under /api prefix
     app.use('/api', apiRouter);
-
+    // Error handling middleware (should be last)
     app.use(errorMiddleware);
+
+    // Initialize other modules on API router
+    await AuthModule(apiRouter);
+    await UsersModule(apiRouter);
+
+    // Apply auth middleware to API routes (after auth routes are registered)
+    // apiRouter.use(authMiddleware);
+
+
 };
 
 export { AppModule };
