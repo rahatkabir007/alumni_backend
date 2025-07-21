@@ -36,7 +36,7 @@ class AuthController {
                     });
                 }
                 const user = await this.authService.loginUser(email, password);
-                res.status(200).json(user);
+                res.status(200).json({ success: true, data: user });
             } catch (error) {
                 res.status(400).json({
                     success: false,
@@ -51,14 +51,15 @@ class AuthController {
         app.get('/auth/me', authMiddleware, async (req, res) => {
             try {
                 const user = req.user;
-                console.log("🚀 ~ AuthController ~ app.get ~ user:", user)
                 if (!user) {
                     return res.status(401).json({
                         success: false,
-                        error: 'Unauthorized'
+                        error: 'User not authenticated'
                     });
                 }
-                res.status(200).json({ success: true, data: user });
+                const userData = await this.authService.getAuthenticatedUserData(user);
+                res.status(200).json({ success: true, data: userData });
+
             } catch (error) {
                 res.status(500).json({
                     success: false,

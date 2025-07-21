@@ -63,12 +63,13 @@ class AuthService {
             }
 
             const { password: _, name, id, roles } = user;
-            const tokenData = {
+
+            const userWithoutPassword = { email: user?.email, name, id, roles };
+
+            const token = generateToken({
                 email: user.email,
                 id: user.id
-            }
-            const userWithoutPassword = { email: user?.email, name, id, roles };
-            const token = generateToken(tokenData);
+            });
 
             return { user: userWithoutPassword, token };
         } catch (error) {
@@ -77,8 +78,27 @@ class AuthService {
         }
     }
 
-    async getAuthenticatedUserData() {
+    async getAuthenticatedUserData(user) {
+        try {
+            console.log(user)
+            if (!user || !user.email) {
+                throw new Error('User not authenticated');
+            }
 
+            const userData = await this.userRepository.findOne({
+                where: { email: user.email }
+            });
+
+            if (!userData) {
+                throw new Error('User not found');
+            }
+
+            const { password, ...userWithoutPassword } = userData;
+            return userWithoutPassword;
+        } catch (error) {
+            console.error('Error fetching authenticated user data:', error);
+            throw error;
+        }
     }
 
 

@@ -97,11 +97,6 @@ export const User = new EntitySchema({
             length: 255,
             nullable: true,
         },
-        facebookId: {
-            type: 'varchar',
-            length: 255,
-            nullable: true,
-        },
         provider: {
             type: 'varchar',
             length: 50,
