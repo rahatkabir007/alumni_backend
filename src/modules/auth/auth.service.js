@@ -77,6 +77,10 @@ class AuthService {
         }
     }
 
+    async getAuthenticatedUserData() {
+
+    }
+
 
 
 }

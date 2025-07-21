@@ -1,32 +1,15 @@
 import jwt from 'jsonwebtoken';
 
 const publicRoutes = [
-    '/',
-    '/register',
-    '/login',
-    '/health',
     '/auth/register',
     '/auth/login',
+    '/health',
     '/auth/google',
     '/auth/google/callback',
-    '/auth/facebook',
-    '/auth/facebook/callback',
-    '/auth/status',
-    // Add API prefixed routes
-    '/api/auth/register',
-    '/api/auth/login',
-    '/api/health',
-    '/api/auth/google',
-    '/api/auth/google/callback',
-    '/api/auth/facebook',
-    '/api/auth/facebook/callback',
-    '/api/auth/status'
+    '/auth/status'
 ];
 
 export const authMiddleware = (req, res, next) => {
-    console.log('Auth middleware - Path:', req.path, 'Method:', req.method);
-
-    // Skip authentication for public routes
     if (publicRoutes.some(route => req.path.startsWith(route)) || req.path === '/') {
         console.log('Public route, skipping auth');
         return next();
@@ -39,7 +22,7 @@ export const authMiddleware = (req, res, next) => {
     }
 
     const authHeader = req.headers.authorization;
-    console.log('Auth header present:', !!authHeader);
+    console.log('Auth header present:', authHeader);
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         console.log('No valid Bearer token found');
@@ -49,7 +32,7 @@ export const authMiddleware = (req, res, next) => {
         });
     }
 
-    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    const token = authHeader.substring(7);
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);

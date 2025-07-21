@@ -26,7 +26,7 @@ class AuthController {
             }
         });
 
-        app.post('/auth/login', async (req, res) => {
+        app.post('/auth/login', authMiddleware, async (req, res) => {
             try {
                 const { email, password } = req.body;
                 if (!email || !password) {
@@ -36,7 +36,7 @@ class AuthController {
                     });
                 }
                 const user = await this.authService.loginUser(email, password);
-                res.status(200).json({ success: true, data: user });
+                res.status(200).json(user);
             } catch (error) {
                 res.status(400).json({
                     success: false,
@@ -45,6 +45,28 @@ class AuthController {
                 });
             }
         })
+
+
+
+        app.get('/auth/me', authMiddleware, async (req, res) => {
+            try {
+                const user = req.user;
+                console.log("🚀 ~ AuthController ~ app.get ~ user:", user)
+                if (!user) {
+                    return res.status(401).json({
+                        success: false,
+                        error: 'Unauthorized'
+                    });
+                }
+                res.status(200).json({ success: true, data: user });
+            } catch (error) {
+                res.status(500).json({
+                    success: false,
+                    error: 'Failed to fetch user',
+                    message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+                });
+            }
+        });
 
     }
 }
