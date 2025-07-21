@@ -29,27 +29,6 @@ const configurePassport = () => {
         }
     }));
 
-    // Facebook OAuth Strategy (only if credentials are provided)
-    if (process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET) {
-        passport.use(new FacebookStrategy({
-            clientID: process.env.FACEBOOK_APP_ID,
-            clientSecret: process.env.FACEBOOK_APP_SECRET,
-            callbackURL: `${process.env.BACKEND_URL || 'http://localhost:8000'}/api/auth/facebook/callback`,
-            profileFields: ['id', 'emails', 'name']
-        }, async (accessToken, refreshToken, profile, done) => {
-            try {
-                console.log('Facebook profile:', profile);
-                const user = await authService.findOrCreateOAuthUser(profile, 'facebook');
-                return done(null, user);
-            } catch (error) {
-                console.error('Facebook OAuth error:', error);
-                return done(error, null);
-            }
-        }));
-    } else {
-        console.log('Facebook OAuth not configured - missing FACEBOOK_APP_ID or FACEBOOK_APP_SECRET');
-    }
-
     // Serialize user for session
     passport.serializeUser((user, done) => {
         done(null, user.id);
