@@ -1,6 +1,5 @@
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
-import { Strategy as FacebookStrategy } from 'passport-facebook';
 import { AuthService } from '../modules/auth/auth.service.js';
 
 const configurePassport = () => {

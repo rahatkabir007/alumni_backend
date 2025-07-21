@@ -26,7 +26,6 @@ const sessionMiddleware = session(sessionConfig);
 export const conditionalSession = (req, res, next) => {
     // Check if this is an OAuth route that needs session
     const needsSession = req.path.includes('/auth/google') ||
-        req.path.includes('/auth/facebook') ||
         req.path.includes('/oauth/');
 
     if (needsSession) {

@@ -85,7 +85,7 @@ export const User = new EntitySchema({
             type: 'varchar',
             length: 50,
             nullable: true,
-            comment: 'Source of profile photo: google, facebook, manual, or null'
+            comment: 'Source of profile photo: google, manual, or null'
         },
         roles: {
             type: 'json',

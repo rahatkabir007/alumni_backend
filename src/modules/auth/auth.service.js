@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt';
 import { getDataSource } from '../../config/database.js';
 import { User } from '../../entities/User.js';
 import { generateToken } from '../../utils/jwtSign.js';
+import { extractUserName } from '../../helpers/oauth.helper.js';
 
 class AuthService {
     constructor() {
@@ -114,41 +115,68 @@ class AuthService {
     async findOrCreateOAuthUser(profile, provider) {
         try {
             const email = profile.emails[0].value;
+            const extractedName = extractUserName(profile);
+            const extractedPhoto = extractProfilePhoto(profile);
+
+            console.log('OAuth Profile Data:', {
+                email,
+                name: extractedName,
+                photo: extractedPhoto,
+                provider
+            });
+
             let user = await this.userRepository.findOne({
                 where: { email: email }
             });
 
             if (user) {
-                // If user exists but was registered with email/password
+                // User exists - update OAuth info and potentially photo
                 if (user.provider === 'email' && user.password) {
-                    // Allow linking OAuth account to existing email account
+                    // Link OAuth account to existing email account
                     if (provider === 'google' && !user.googleId) {
                         user.googleId = profile.id;
-                        // Optionally update provider to indicate OAuth is also available
-                        user.provider = 'email,google'; // Or keep as 'email'
+                        user.provider = 'email,google';
+
+                        // Update profile photo if it should be updated
+                        if (extractedPhoto && shouldUpdateProfilePhoto(user, extractedPhoto, provider)) {
+                            user.profilePhoto = extractedPhoto;
+                            user.profilePhotoSource = provider;
+                        }
                     }
-                    user = await this.userRepository.save(user);
                 } else {
-                    // Update provider info if user exists with OAuth
+                    // Update existing OAuth user
                     if (provider === 'google' && !user.googleId) {
                         user.googleId = profile.id;
                     }
-                    user = await this.userRepository.save(user);
+
+                    // Update profile photo if it should be updated
+                    if (extractedPhoto && shouldUpdateProfilePhoto(user, extractedPhoto, provider)) {
+                        user.profilePhoto = extractedPhoto;
+                        user.profilePhotoSource = provider;
+                    }
+
+                    // Update name if it's empty or from same provider
+                    if (!user.name || user.name.trim() === '' || user.provider === provider) {
+                        user.name = extractedName;
+                    }
                 }
+
+                user = await this.userRepository.save(user);
             } else {
                 // Create new user with OAuth
                 const userData = {
                     email: email,
-                    name: profile.displayName || `${profile.name?.givenName || ''} ${profile.name?.familyName || ''}`.trim(),
+                    name: extractedName,
                     provider: provider,
                     roles: ['user'],
+                    profilePhoto: extractedPhoto || '', // Set profile photo from OAuth
+                    profilePhotoSource: extractedPhoto ? provider : null, // Set source if photo exists
                 };
 
                 if (provider === 'google') {
                     userData.googleId = profile.id;
-                } else if (provider === 'facebook') {
-                    userData.facebookId = profile.id;
                 }
+                console.log('Creating new OAuth user:', userData);
 
                 user = this.userRepository.create(userData);
                 user = await this.userRepository.save(user);

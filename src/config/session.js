@@ -31,7 +31,6 @@ export const createSessionConfig = () => {
 export const oauthSessionMiddleware = (req, res, next) => {
     // Only apply session middleware to OAuth routes
     const isOAuthRoute = req.path.includes('/auth/google') ||
-        req.path.includes('/auth/facebook') ||
         req.path.includes('/oauth');
 
     if (isOAuthRoute) {
