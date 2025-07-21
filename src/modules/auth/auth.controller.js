@@ -1,12 +1,10 @@
 import passport from 'passport';
-import jwt from 'jsonwebtoken';
-import { generateToken } from '../../utils/jwtSign.js';
 import { AuthService } from './auth.service.js';
-import { requireAdmin, roleMiddleware } from '../../middlewares/role.middleware.js';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
 import { tokenBlacklist } from '../../utils/tokenBlacklist.js';
 import { ResponseHandler } from '../../utils/responseHandler.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
+import { generateToken } from '../../utils/jwtSign.js';
 
 class AuthController {
     constructor() {
@@ -34,15 +32,39 @@ class AuthController {
             return ResponseHandler.success(res, user, 'Login successful');
         }));
 
-        app.post('/auth/login/google',
-            passport.authenticate('google-token', { session: false }),
-            asyncHandler(async (req, res) => {
-                if (!req.user) {
-                    return ResponseHandler.unauthorized(res, 'Google authentication failed');
-                }
+        app.get('/auth/google',
+            passport.authenticate('google', { scope: ['profile', 'email'] })
+        );
 
-                const user = await this.authService.loginWithGoogle(req.user);
-                return ResponseHandler.success(res, user, 'Google login successful');
+        app.get('/auth/google/callback',
+            passport.authenticate('google', { failureRedirect: `${process.env.FRONTEND_URL}/login?error=google_auth_failed` }),
+            asyncHandler(async (req, res) => {
+                try {
+                    const user = req.user;
+
+                    if (!user) {
+                        return res.redirect(`${process.env.FRONTEND_URL}/login?error=authentication_failed`);
+                    }
+
+                    const token = generateToken({
+                        email: user.email,
+                        id: user.id
+                    });
+
+                    console.log('Google login successful:', token);
+
+                    res.redirect(`${process.env.FRONTEND_URL}/auth/callback?token=${token}&user=${encodeURIComponent(JSON.stringify({
+                        id: req.user.id,
+                        email: req.user.email,
+                        name: req.user.name,
+                        provider: req.user.provider,
+                        roles: req.user.roles || ['user']
+                    }))}`);
+
+                } catch (error) {
+                    console.error('Google callback error:', error);
+                    res.redirect(`${process.env.FRONTEND_URL}/login?error=token_generation_failed`);
+                }
             })
         );
 

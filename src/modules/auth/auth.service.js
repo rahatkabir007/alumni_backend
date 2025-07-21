@@ -101,7 +101,63 @@ class AuthService {
         }
     }
 
+    async findOrCreateOAuthUser(profile, provider) {
+        try {
+            const email = profile.emails[0].value;
+            let user = await this.userRepository.findOne({
+                where: { email: email }
+            });
 
+            if (user) {
+                // Update provider info if user exists
+                if (provider === 'google' && !user.googleId) {
+                    user.googleId = profile.id;
+                }
+                user = await this.userRepository.save(user);
+            } else {
+                // Create new user with default role
+                const userData = {
+                    email: email,
+                    name: profile.displayName || `${profile.name?.givenName || ''} ${profile.name?.familyName || ''}`.trim(),
+                    provider: provider,
+                    roles: ['user'], // Default role as array
+                };
+
+                if (provider === 'google') {
+                    userData.googleId = profile.id;
+                } else if (provider === 'facebook') {
+                    userData.facebookId = profile.id;
+                }
+
+                user = this.userRepository.create(userData);
+                user = await this.userRepository.save(user);
+            }
+
+            const { password, ...userWithoutPassword } = user;
+            return userWithoutPassword;
+        } catch (error) {
+            console.error('OAuth user creation/login error:', error);
+            throw error;
+        }
+    }
+
+
+    async getUserById(id) {
+        try {
+            const user = await this.userRepository.findOne({
+                where: { id: id }
+            });
+
+            if (user) {
+                const { password, ...userWithoutPassword } = user;
+                return userWithoutPassword;
+            }
+            return null;
+        } catch (error) {
+            console.error('Get user by ID error:', error);
+            throw error;
+        }
+    }
 
 }
 
