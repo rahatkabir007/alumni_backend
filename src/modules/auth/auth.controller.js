@@ -15,7 +15,11 @@ class AuthController {
         // Email/Password Authentication Routes
         app.post('/auth/register', asyncHandler(async (req, res) => {
             const result = await this.authService.registerUser(req.body);
-            return ResponseHandler.created(res, result, 'User registered successfully');
+
+            // Check if this was a password addition for existing OAuth user
+            const message = result.message || 'User registered successfully';
+
+            return ResponseHandler.created(res, result, message);
         }));
 
         app.post('/auth/login', asyncHandler(async (req, res) => {

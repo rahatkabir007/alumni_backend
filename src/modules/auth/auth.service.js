@@ -2,7 +2,7 @@ import bcrypt from 'bcrypt';
 import { getDataSource } from '../../config/database.js';
 import { User } from '../../entities/User.js';
 import { generateToken } from '../../utils/jwtSign.js';
-import { extractUserName } from '../../helpers/oauth.helper.js';
+import { extractProfilePhoto, extractUserName, shouldUpdateProfilePhoto } from '../../helpers/oauth.helper.js';
 
 class AuthService {
     constructor() {
@@ -23,9 +23,35 @@ class AuthService {
             });
 
             if (existingUser) {
-                throw new Error('User already exists with this email');
+                // If user exists and has a password, they can't register again
+                if (existingUser.password) {
+                    throw new Error('User already exists with this email');
+                }
+
+                // If user exists but only has OAuth (no password), allow them to set a password
+                if (!existingUser.password && existingUser.provider && existingUser.provider !== 'email') {
+                    console.log(`Allowing ${existingUser.provider} user to set password for email login`);
+
+                    const hashedPassword = await bcrypt.hash(userData.password, 10);
+
+                    // Update existing user with password and combined provider
+                    existingUser.password = hashedPassword;
+                    existingUser.name = userData.name || existingUser.name; // Keep existing name if no new name provided
+                    existingUser.provider = `${existingUser.provider},email`; // Combine providers
+
+                    const savedUser = await this.userRepository.save(existingUser);
+                    const { email, roles, id, name } = savedUser;
+
+                    const userWithoutPassword = { email, roles, id, name };
+
+                    return {
+                        user: userWithoutPassword,
+                        message: 'Password added successfully. You can now login with both email/password and Google.'
+                    };
+                }
             }
 
+            // Create new user with email/password
             const hashedPassword = await bcrypt.hash(userData.password, 10);
 
             const user = this.userRepository.create({
@@ -37,9 +63,9 @@ class AuthService {
             });
 
             const savedUser = await this.userRepository.save(user);
-            const { email, roles, id } = savedUser;
+            const { email, roles, id, name } = savedUser;
 
-            const userWithoutPassword = { email, roles, id };
+            const userWithoutPassword = { email, roles, id, name };
 
             return { user: userWithoutPassword };
         } catch (error) {
@@ -60,7 +86,7 @@ class AuthService {
 
             // Check if user registered with OAuth provider and has no password
             if (!user.password && user.provider && user.provider !== 'email') {
-                throw new Error(`This email is registered with ${user.provider}. Please login using ${user.provider} instead.`);
+                throw new Error(`This email is registered with ${user.provider}. You can register with email/password to enable login with both methods.`);
             }
 
             // Check if user has no password but provider is email (edge case)
@@ -73,9 +99,17 @@ class AuthService {
                 throw new Error('Invalid password');
             }
 
-            const { password: _, name, id, roles } = user;
+            const { password: _, name, id, roles, profilePhoto, profilePhotoSource } = user;
 
-            const userWithoutPassword = { email: user?.email, name, id, roles };
+            const userWithoutPassword = {
+                email: user.email,
+                name,
+                id,
+                roles,
+                profilePhoto,
+                profilePhotoSource,
+                provider: user.provider
+            };
 
             const token = generateToken({
                 email: user.email,
@@ -143,8 +177,20 @@ class AuthService {
                             user.profilePhotoSource = provider;
                         }
                     }
+                } else if (user.provider && user.provider.includes('email')) {
+                    // User has both email and OAuth - just update OAuth info
+                    if (provider === 'google' && !user.googleId) {
+                        user.googleId = profile.id;
+                        // Provider already contains both, no need to update
+                    }
+
+                    // Update profile photo if it should be updated
+                    if (extractedPhoto && shouldUpdateProfilePhoto(user, extractedPhoto, provider)) {
+                        user.profilePhoto = extractedPhoto;
+                        user.profilePhotoSource = provider;
+                    }
                 } else {
-                    // Update existing OAuth user
+                    // Update existing OAuth-only user
                     if (provider === 'google' && !user.googleId) {
                         user.googleId = profile.id;
                     }
@@ -163,19 +209,20 @@ class AuthService {
 
                 user = await this.userRepository.save(user);
             } else {
-                // Create new user with OAuth
+                // Create new user with OAuth only
                 const userData = {
                     email: email,
                     name: extractedName,
                     provider: provider,
                     roles: ['user'],
-                    profilePhoto: extractedPhoto || '', // Set profile photo from OAuth
-                    profilePhotoSource: extractedPhoto ? provider : null, // Set source if photo exists
+                    profilePhoto: extractedPhoto || '',
+                    profilePhotoSource: extractedPhoto ? provider : null,
                 };
 
                 if (provider === 'google') {
                     userData.googleId = profile.id;
                 }
+
                 console.log('Creating new OAuth user:', userData);
 
                 user = this.userRepository.create(userData);
