@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { tokenBlacklist } from '../utils/tokenBlacklist.js';
 
 const publicRoutes = [
     '/auth/register',
@@ -34,9 +35,19 @@ export const authMiddleware = (req, res, next) => {
 
     const token = authHeader.substring(7);
 
+    // Check if token is blacklisted
+    if (tokenBlacklist.isBlacklisted(token)) {
+        console.log('Token is blacklisted');
+        return res.status(401).json({
+            success: false,
+            error: 'Token has been invalidated'
+        });
+    }
+
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.user = decoded;
+        req.token = token; // Store token for potential blacklisting
         next();
     } catch (error) {
         console.error('JWT verification error:', error.message);

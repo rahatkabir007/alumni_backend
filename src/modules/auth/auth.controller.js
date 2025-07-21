@@ -4,6 +4,7 @@ import { generateToken } from '../../utils/jwtSign.js';
 import { AuthService } from './auth.service.js';
 import { requireAdmin, roleMiddleware } from '../../middlewares/role.middleware.js';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
+import { tokenBlacklist } from '../../utils/tokenBlacklist.js';
 
 class AuthController {
     constructor() {
@@ -45,6 +46,29 @@ class AuthController {
                 });
             }
         })
+
+        app.post('/auth/logout', authMiddleware, async (req, res) => {
+            try {
+                // Add token to blacklist
+                const token = req.token;
+                console.log("🚀 ~ AuthController ~ app.post ~ token:", token)
+                if (token) {
+                    tokenBlacklist.addToken(token);
+                    console.log('Token blacklisted successfully');
+                }
+
+                res.status(200).json({
+                    success: true,
+                    message: 'Logged out successfully'
+                });
+            } catch (error) {
+                res.status(500).json({
+                    success: false,
+                    error: 'Logout failed',
+                    message: process.env.NODE_ENV === 'development' ? error.message : 'Logout failed'
+                });
+            }
+        });
 
 
         app.get('/auth/me', authMiddleware, async (req, res) => {
