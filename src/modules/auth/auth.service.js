@@ -47,6 +47,36 @@ class AuthService {
         }
     }
 
+    async loginUser(email, password) {
+        try {
+            const user = await this.userRepository.findOne({
+                where: { email }
+            });
+
+            if (!user) {
+                throw new Error('User not found');
+            }
+
+            const isPasswordValid = await bcrypt.compare(password, user.password);
+            if (!isPasswordValid) {
+                throw new Error('Invalid password');
+            }
+
+            const { password: _, name, id, roles } = user;
+            const tokenData = {
+                email: user.email,
+                id: user.id
+            }
+            const userWithoutPassword = { email: user?.email, name, id, roles };
+            const token = generateToken(tokenData);
+
+            return { user: userWithoutPassword, token };
+        } catch (error) {
+            console.error('Login error in service:', error);
+            throw error;
+        }
+    }
+
 
 
 }
