@@ -43,8 +43,10 @@ class UsersService {
 
             // Validate sort parameters
             const allowedSortFields = [
-                'id', 'email', 'name', 'created_at', 'updated_at',
-                'graduation_year', 'batch', 'profession', 'provider'
+                'created_at', 'updated_at', 'name', 'email', 'phone', 'location',
+                'profession', 'graduation_year', 'batch', 'bio', 'isActive',
+                'isGraduated', 'left_at', 'profilePhotoSource', 'alumni_type',
+                'blood_group', 'profilePhoto',
             ];
 
             const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
@@ -60,6 +62,7 @@ class UsersService {
                 'user.name',
                 'user.phone',
                 'user.alumni_type',
+                'user.blood_group',
                 'user.location',
                 'user.profession',
                 'user.graduation_year',
@@ -163,7 +166,7 @@ class UsersService {
             return await this.userRepository.findOne({
                 where: { id: userId },
                 select: [
-                    'id', 'email', 'name', 'phone', 'location', 'profession', 'alumni_type',
+                    'id', 'email', 'name', 'phone', 'location', 'profession', 'alumni_type', 'blood_group',
                     'graduation_year', 'batch', 'bio', 'isActive', 'isGraduated',
                     'left_at', 'profilePhoto', 'profilePhotoSource', 'roles',
                     'provider', 'created_at', 'updated_at'
@@ -233,6 +236,13 @@ class UsersService {
                 validatedData.left_at = validateLeftAtYear(updateData.left_at);
             }
 
+            if (updateData.blood_group !== undefined) {
+                if (['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].includes(updateData.blood_group)) {
+                    validatedData.blood_group = updateData.blood_group;
+                } else {
+                    throw new Error('Invalid blood group');
+                }
+            }
             if (updateData.alumni_type !== undefined) {
                 if (['student', 'teacher', 'management'].includes(updateData.alumni_type)) {
                     validatedData.alumni_type = updateData.alumni_type;

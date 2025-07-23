@@ -93,6 +93,12 @@ export const User = new EntitySchema({
             nullable: true,
             comment: 'Type of alumni: student, teacher, or null'
         },
+        blood_group: {
+            type: 'varchar',
+            length: 10,
+            nullable: true,
+            comment: 'User blood group'
+        },
         roles: {
             type: 'json',
             default: () => "'[\"user\"]'",
