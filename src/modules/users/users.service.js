@@ -233,6 +233,31 @@ class UsersService {
                 validatedData.left_at = validateLeftAtYear(updateData.left_at);
             }
 
+            if (updateData.alumni_type !== undefined) {
+                if (['student', 'teacher', 'management'].includes(updateData.alumni_type)) {
+                    validatedData.alumni_type = updateData.alumni_type;
+                }
+                else {
+                    throw new Error('Invalid alumni type');
+                }
+            }
+            if (updateData.profilePhotoSource !== undefined) {
+                if (['google', 'manual'].includes(updateData.profilePhotoSource)) {
+                    validatedData.profilePhotoSource = updateData.profilePhotoSource;
+                } else {
+                    throw new Error('Invalid profile photo source');
+                }
+            }
+            if (updateData.profilePhoto !== undefined) {
+                if (typeof updateData.profilePhoto === 'string' && updateData.profilePhoto.length <= 500) {
+                    validatedData.profilePhoto = updateData.profilePhoto;
+                } else {
+                    throw new Error('Invalid profile photo URL');
+                }
+            }
+
+
+
             // Apply validated changes
             Object.assign(user, validatedData);
             const updatedUser = await this.userRepository.save(user);
