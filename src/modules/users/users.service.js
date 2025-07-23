@@ -33,7 +33,9 @@ class UsersService {
                 provider = '',
                 isActive = '',
                 isGraduated = '',
-                graduation_year = ''
+                graduation_year = '',
+                status = '',
+                role = ''
             } = queryParams;
 
             // Validate pagination parameters
@@ -44,7 +46,7 @@ class UsersService {
             // Validate sort parameters
             const allowedSortFields = [
                 'created_at', 'updated_at', 'name', 'email', 'phone', 'location',
-                'profession', 'graduation_year', 'batch', 'bio', 'isActive',
+                'profession', 'graduation_year', 'batch', 'bio', 'isActive', 'roles',
                 'isGraduated', 'left_at', 'profilePhotoSource', 'alumni_type', 'status',
                 'blood_group', 'profilePhoto',
             ];
@@ -114,6 +116,19 @@ class UsersService {
                 }
             }
 
+            // Apply status filter (active, inactive, pending, etc.)
+            if (status && status.trim()) {
+                queryBuilder.andWhere('user.status ILIKE :status', { status: status.trim() });
+            }
+
+            // Apply role filter - check if role exists in the roles array
+            if (role && role.trim()) {
+                // Use CAST instead of :: syntax for better compatibility
+                queryBuilder.andWhere(
+                    'CAST(user.roles AS TEXT) LIKE :rolePattern',
+                    { rolePattern: `%"${role.trim()}"%` }
+                );
+            }
             // Apply sorting
             queryBuilder.orderBy(`user.${validSortBy}`, validSortOrder);
 
@@ -147,6 +162,8 @@ class UsersService {
                 //     isActive: isActive || null,
                 //     isGraduated: isGraduated || null,
                 //     graduation_year: graduation_year || null,
+                //     status: status || null,
+                //     role: role || null,
                 //     sortBy: validSortBy,
                 //     sortOrder: validSortOrder
                 // }
@@ -156,7 +173,6 @@ class UsersService {
             throw error;
         }
     }
-
     async getUserById(id) {
         try {
             const userId = parseInt(id);
