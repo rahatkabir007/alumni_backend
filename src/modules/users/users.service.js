@@ -326,6 +326,44 @@ class UsersService {
         }
     }
 
+    async updateRole(id, role) {
+        try {
+            const userId = parseInt(id);
+            if (isNaN(userId)) {
+                throw new Error('Invalid user ID');
+            }
+
+            const user = await this.userRepository.findOne({ where: { id: userId } });
+
+            if (!user) {
+                throw new Error('User not found');
+            }
+
+            // Validate role
+            if (typeof role !== 'string' || role.length > 50) {
+                throw new Error('Invalid role');
+            }
+
+            // Ensure roles is an array
+            if (!Array.isArray(user.roles)) {
+                user.roles = [];
+            }
+
+            // Add the new role if it doesn't already exist
+            if (!user.roles.includes(role)) {
+                user.roles.push(role);
+            }
+
+            const updatedUser = await this.userRepository.save(user);
+
+            const { password, ...userWithoutPassword } = updatedUser;
+            return userWithoutPassword;
+        } catch (error) {
+            console.error('Update user role error:', error);
+            throw error;
+        }
+    }
+
     async deleteUser(id) {
         try {
             const userId = parseInt(id);
