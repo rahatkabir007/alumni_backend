@@ -59,14 +59,15 @@ class AuthService {
                 password: hashedPassword,
                 name: userData.name,
                 alumni_type: userData.alumni_type || null,
+                status: "pending",
                 roles: ['user'],
                 provider: 'email'
             });
 
             const savedUser = await this.userRepository.save(user);
-            const { email, roles, id, name, alumni_type } = savedUser;
+            const { email, roles, id, name, alumni_type, status } = savedUser;
 
-            const userWithoutPassword = { email, roles, id, name, alumni_type };
+            const userWithoutPassword = { email, roles, id, name, alumni_type, status };
 
             return { user: userWithoutPassword };
         } catch (error) {

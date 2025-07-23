@@ -64,6 +64,12 @@ export const User = new EntitySchema({
             nullable: false,
             comment: 'Admin controlled active status'
         },
+        status: {
+            type: 'varchar',
+            length: 50,
+            nullable: true,
+            comment: 'User status (e.g., active, inactive, pending)'
+        },
         isGraduated: {
             type: 'boolean',
             default: true,

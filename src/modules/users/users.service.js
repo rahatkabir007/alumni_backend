@@ -45,7 +45,7 @@ class UsersService {
             const allowedSortFields = [
                 'created_at', 'updated_at', 'name', 'email', 'phone', 'location',
                 'profession', 'graduation_year', 'batch', 'bio', 'isActive',
-                'isGraduated', 'left_at', 'profilePhotoSource', 'alumni_type',
+                'isGraduated', 'left_at', 'profilePhotoSource', 'alumni_type', 'status',
                 'blood_group', 'profilePhoto',
             ];
 
@@ -62,6 +62,7 @@ class UsersService {
                 'user.name',
                 'user.phone',
                 'user.alumni_type',
+                'user.status',
                 'user.blood_group',
                 'user.location',
                 'user.profession',
@@ -166,7 +167,7 @@ class UsersService {
             return await this.userRepository.findOne({
                 where: { id: userId },
                 select: [
-                    'id', 'email', 'name', 'phone', 'location', 'profession', 'alumni_type', 'blood_group',
+                    'id', 'email', 'name', 'phone', 'location', 'profession', 'alumni_type', 'blood_group', 'status',
                     'graduation_year', 'batch', 'bio', 'isActive', 'isGraduated',
                     'left_at', 'profilePhoto', 'profilePhotoSource', 'roles',
                     'provider', 'created_at', 'updated_at'
@@ -276,6 +277,35 @@ class UsersService {
             return userWithoutPassword;
         } catch (error) {
             console.error('Update user error:', error);
+            throw error;
+        }
+    }
+
+    async updateStatus(id, status) {
+        try {
+            const userId = parseInt(id);
+            if (isNaN(userId)) {
+                throw new Error('Invalid user ID');
+            }
+
+            const user = await this.userRepository.findOne({ where: { id: userId } });
+
+            if (!user) {
+                throw new Error('User not found');
+            }
+
+            // Validate status
+            if (typeof status !== 'string' || status.length > 50) {
+                throw new Error('Invalid status');
+            }
+
+            user.status = status;
+            const updatedUser = await this.userRepository.save(user);
+
+            const { password, ...userWithoutPassword } = updatedUser;
+            return userWithoutPassword;
+        } catch (error) {
+            console.error('Update user status error:', error);
             throw error;
         }
     }

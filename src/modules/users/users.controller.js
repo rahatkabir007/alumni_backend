@@ -44,6 +44,17 @@ class UsersController {
             return ResponseHandler.success(res, result, 'User updated successfully');
         }));
 
+        app.patch('/users/:id/status', authMiddleware, asyncHandler(async (req, res) => {
+            const { status } = req.body;
+            if (!status) {
+                return ResponseHandler.error(res, new Error('Status is required'), 'Status is required');
+            }
+            const result = await this.usersService.updateStatus(req.params.id, status);
+            if (!result) {
+                return ResponseHandler.notFound(res, 'User not found');
+            }
+            return ResponseHandler.success(res, result, 'User status updated successfully');
+        }));
         // Delete user
         app.delete('/users/:id', authMiddleware, asyncHandler(async (req, res) => {
             const result = await this.usersService.deleteUser(req.params.id);
