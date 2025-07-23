@@ -46,6 +46,7 @@ class UsersService {
                 'id', 'email', 'name', 'created_at', 'updated_at',
                 'graduation_year', 'batch', 'profession', 'provider'
             ];
+
             const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
             const validSortOrder = ['ASC', 'DESC'].includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : 'DESC';
 
@@ -58,6 +59,7 @@ class UsersService {
                 'user.email',
                 'user.name',
                 'user.phone',
+                'user.alumni_type',
                 'user.location',
                 'user.profession',
                 'user.graduation_year',
@@ -161,7 +163,7 @@ class UsersService {
             return await this.userRepository.findOne({
                 where: { id: userId },
                 select: [
-                    'id', 'email', 'name', 'phone', 'location', 'profession',
+                    'id', 'email', 'name', 'phone', 'location', 'profession', 'alumni_type',
                     'graduation_year', 'batch', 'bio', 'isActive', 'isGraduated',
                     'left_at', 'profilePhoto', 'profilePhotoSource', 'roles',
                     'provider', 'created_at', 'updated_at'

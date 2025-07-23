@@ -223,7 +223,7 @@ class AuthService {
                     userData.googleId = profile.id;
                 }
 
-                console.log('Creating new OAuth user:', userData);
+                // console.log('Creating new OAuth user:', userData);
 
                 user = this.userRepository.create(userData);
                 user = await this.userRepository.save(user);

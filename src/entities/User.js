@@ -87,6 +87,13 @@ export const User = new EntitySchema({
             nullable: true,
             comment: 'Source of profile photo: google, manual, or null'
         },
+        alumni_type: {
+            type: 'varchar',
+            length: 50,
+            nullable: true,
+            default: 'student',
+            comment: 'Type of alumni: student, teacher, or null'
+        },
         roles: {
             type: 'json',
             default: () => "'[\"user\"]'",
