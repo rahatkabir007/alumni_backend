@@ -28,9 +28,10 @@ class UsersController {
             return ResponseHandler.success(res, result, 'Users retrieved successfully');
         }));
 
-        // Get user by ID
+        // Get user by ID with optional profile details
         app.get('/users/:id', authMiddleware, asyncHandler(async (req, res) => {
-            const result = await this.usersService.getUserById(req.params.id);
+            const includeDetails = req.query.includeDetails === 'true';
+            const result = await this.usersService.getUserById(req.params.id, includeDetails);
 
             if (!result) {
                 return ResponseHandler.notFound(res, 'User not found');
@@ -39,7 +40,18 @@ class UsersController {
             return ResponseHandler.success(res, result, 'User retrieved successfully');
         }));
 
-        // Update user (regular users can update their own profile, admins/moderators can update any)
+        // Get current user's complete profile (for authenticated user)
+        app.get('/users/me/profile', authMiddleware, asyncHandler(async (req, res) => {
+            const result = await this.usersService.getUserById(req.user.id, true);
+
+            if (!result) {
+                return ResponseHandler.notFound(res, 'User profile not found');
+            }
+
+            return ResponseHandler.success(res, result, 'User profile retrieved successfully');
+        }));
+
+        // Update basic user profile (works for all alumni types)
         app.patch('/users/:id', authMiddleware, asyncHandler(async (req, res) => {
             const targetUserId = parseInt(req.params.id);
             const currentUser = req.user;
@@ -55,6 +67,29 @@ class UsersController {
 
             const result = await this.usersService.updateUser(req.params.id, req.body);
             return ResponseHandler.success(res, result, 'User updated successfully');
+        }));
+
+        // Update user's additional information (replaces all profile-specific endpoints)
+        app.patch('/users/:id/additional-info', authMiddleware, asyncHandler(async (req, res) => {
+            const targetUserId = parseInt(req.params.id);
+            const currentUser = req.user;
+
+            const canUpdate = currentUser.id === targetUserId ||
+                currentUser.roles.includes('admin') ||
+                currentUser.roles.includes('moderator');
+
+            if (!canUpdate) {
+                return ResponseHandler.forbidden(res, 'You can only update your own profile');
+            }
+
+            const result = await this.usersService.updateAdditionalInformation(req.params.id, req.body);
+            return ResponseHandler.success(res, result, 'Additional information updated successfully');
+        }));
+
+        // Convenience endpoint for current user
+        app.patch('/users/me/additional-info', authMiddleware, asyncHandler(async (req, res) => {
+            const result = await this.usersService.updateAdditionalInformation(req.user.id, req.body);
+            return ResponseHandler.success(res, result, 'Your additional information updated successfully');
         }));
 
         // Update status - Only admin and moderator

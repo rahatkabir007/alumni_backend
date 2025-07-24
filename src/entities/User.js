@@ -97,13 +97,18 @@ export const User = new EntitySchema({
             type: 'varchar',
             length: 50,
             nullable: true,
-            comment: 'Type of alumni: student, teacher, or null'
+            comment: 'Type of alumni: student, teacher, management'
         },
         blood_group: {
             type: 'varchar',
             length: 10,
             nullable: true,
             comment: 'User blood group'
+        },
+        additional_information: {
+            type: 'json',
+            nullable: true,
+            comment: 'Alumni type specific data (education, experience, achievements, etc.)'
         },
         roles: {
             type: 'json',
@@ -127,38 +132,6 @@ export const User = new EntitySchema({
         updated_at: {
             type: 'timestamp',
             updateDate: true,
-        },
-    },
-    relations: {
-        studentProfile: {
-            type: 'one-to-one',
-            target: 'StudentProfile',
-            inverseSide: 'user',
-            cascade: true,
-        },
-        teacherProfile: {
-            type: 'one-to-one',
-            target: 'TeacherProfile',
-            inverseSide: 'user',
-            cascade: true,
-        },
-        managementProfile: {
-            type: 'one-to-one',
-            target: 'ManagementProfile',
-            inverseSide: 'user',
-            cascade: true,
-        },
-        education: {
-            type: 'one-to-many',
-            target: 'Education',
-            inverseSide: 'user',
-            cascade: true,
-        },
-        experience: {
-            type: 'one-to-many',
-            target: 'Experience',
-            inverseSide: 'user',
-            cascade: true,
         },
     },
 });

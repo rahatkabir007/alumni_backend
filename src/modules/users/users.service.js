@@ -1,11 +1,5 @@
 import { getDataSource } from "../../config/database.js";
 import { User } from "../../entities/User.js";
-import { StudentProfile } from "../../entities/StudentProfile.js";
-import { TeacherProfile } from "../../entities/TeacherProfile.js";
-import { Education } from "../../entities/Education.js";
-import { Experience } from "../../entities/Experience.js";
-// import { Achievement } from "../../entities/Achievement.js";
-// import { Publication } from "../../entities/Publication.js";
 import {
     sanitizeName,
     validatePhone,
@@ -16,20 +10,12 @@ import {
     validateBio,
     validateLeftAtYear
 } from "../../helpers/validation.helper.js";
-import { ManagementProfile } from "../../entities/ManagementProfile.js";
 
 class UsersService {
     constructor() {
         try {
             this.dataSource = getDataSource();
             this.userRepository = this.dataSource.getRepository(User);
-            this.studentProfileRepository = this.dataSource.getRepository(StudentProfile);
-            this.teacherProfileRepository = this.dataSource.getRepository(TeacherProfile);
-            this.managementProfileRepository = this.dataSource.getRepository(ManagementProfile);
-            this.educationRepository = this.dataSource.getRepository(Education);
-            this.experienceRepository = this.dataSource.getRepository(Experience);
-            // this.achievementRepository = this.dataSource.getRepository(Achievement);
-            // this.publicationRepository = this.dataSource.getRepository(Publication);
         } catch (error) {
             console.error('Error initializing UsersService:', error);
             throw error;
@@ -49,8 +35,7 @@ class UsersService {
                 isGraduated = '',
                 graduation_year = '',
                 status = '',
-                role = '',
-                includeProfile = false
+                role = ''
             } = queryParams;
 
             // Validate pagination parameters
@@ -69,7 +54,7 @@ class UsersService {
             const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
             const validSortOrder = ['ASC', 'DESC'].includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : 'DESC';
 
-            // Build query with optional profile data
+            // Build query
             const queryBuilder = this.userRepository.createQueryBuilder('user');
 
             // Select fields (exclude password)
@@ -81,13 +66,6 @@ class UsersService {
                 'user.profilePhotoSource', 'user.roles', 'user.provider',
                 'user.created_at', 'user.updated_at'
             ]);
-
-            // Include profile data if requested
-            if (includeProfile) {
-                queryBuilder
-                    .leftJoinAndSelect('user.studentProfile', 'studentProfile')
-                    .leftJoinAndSelect('user.teacherProfile', 'teacherProfile');
-            }
 
             // Apply search filter
             if (search && search.trim()) {
@@ -162,18 +140,6 @@ class UsersService {
                 itemsPerPage: limitNum,
                 hasNextPage,
                 hasPrevPage,
-                // // Optional: Include applied filters and sorting for debugging
-                // appliedFilters: {
-                //     search: search || null,
-                //     provider: provider || null,
-                //     isActive: isActive || null,
-                //     isGraduated: isGraduated || null,
-                //     graduation_year: graduation_year || null,
-                //     status: status || null,
-                //     role: role || null,
-                //     sortBy: validSortBy,
-                //     sortOrder: validSortOrder
-                // }
             };
         } catch (error) {
             console.error('Get users error:', error);
@@ -187,30 +153,23 @@ class UsersService {
                 throw new Error('Invalid user ID');
             }
 
-            const queryBuilder = this.userRepository.createQueryBuilder('user')
-                .where('user.id = :id', { id: userId })
-                .select([
-                    'user.id', 'user.email', 'user.name', 'user.phone', 'user.location',
-                    'user.profession', 'user.alumni_type', 'user.blood_group', 'user.status',
-                    'user.graduation_year', 'user.batch', 'user.bio', 'user.isActive',
-                    'user.isGraduated', 'user.left_at', 'user.profilePhoto',
-                    'user.profilePhotoSource', 'user.roles', 'user.provider',
-                    'user.created_at', 'user.updated_at'
-                ]);
+            const selectFields = [
+                'id', 'email', 'name', 'phone', 'location',
+                'profession', 'alumni_type', 'blood_group', 'status',
+                'graduation_year', 'batch', 'bio', 'isActive',
+                'isGraduated', 'left_at', 'profilePhoto',
+                'profilePhotoSource', 'roles', 'provider',
+                'created_at', 'updated_at'
+            ];
 
             if (includeDetails) {
-                // Include profile based on alumni type
-                queryBuilder
-                    .leftJoinAndSelect('user.studentProfile', 'studentProfile')
-                    .leftJoinAndSelect('user.teacherProfile', 'teacherProfile')
-                    .leftJoinAndSelect('user.managementProfile', 'managementProfile')
-                    .leftJoinAndSelect('user.education', 'education')
-                    .leftJoinAndSelect('user.experience', 'experience')
-                // .leftJoinAndSelect('user.achievements', 'achievements')
-                // .leftJoinAndSelect('user.publications', 'publications');
+                selectFields.push('additional_information');
             }
 
-            return await queryBuilder.getOne();
+            return await this.userRepository.findOne({
+                where: { id: userId },
+                select: selectFields
+            });
         } catch (error) {
             console.error('Get user by ID error:', error);
             throw error;
@@ -225,7 +184,6 @@ class UsersService {
             }
 
             const user = await this.userRepository.findOne({ where: { id: userId } });
-
             if (!user) {
                 throw new Error('User not found');
             }
@@ -301,31 +259,17 @@ class UsersService {
                 }
             }
 
-            // Apply validated changes to user
+            // Handle additional_information field
+            if (updateData.additional_information !== undefined) {
+                validatedData.additional_information = this.validateAdditionalInformation(
+                    updateData.additional_information,
+                    user.alumni_type
+                );
+            }
+
+            // Apply validated changes
             Object.assign(user, validatedData);
             const updatedUser = await this.userRepository.save(user);
-
-            // Handle profile-specific data based on alumni_type
-            if (updateData.profileData) {
-                await this.updateProfileData(userId, user.alumni_type, updateData.profileData);
-            }
-
-            // Handle related entities
-            if (updateData.education) {
-                await this.updateEducation(userId, updateData.education);
-            }
-
-            if (updateData.experience) {
-                await this.updateExperience(userId, updateData.experience);
-            }
-
-            if (updateData.achievements) {
-                await this.updateAchievements(userId, updateData.achievements);
-            }
-
-            if (updateData.publications) {
-                await this.updatePublications(userId, updateData.publications);
-            }
 
             const { password, ...userWithoutPassword } = updatedUser;
             return userWithoutPassword;
@@ -335,96 +279,204 @@ class UsersService {
         }
     }
 
-    async updateProfileData(userId, alumniType, profileData) {
+    async updateAdditionalInformation(id, additionalInfo) {
         try {
-            if (alumniType === 'student') {
-                let profile = await this.studentProfileRepository.findOne({ where: { userId } });
-                if (!profile) {
-                    profile = this.studentProfileRepository.create({ userId, ...profileData });
-                } else {
-                    Object.assign(profile, profileData);
-                }
-                await this.studentProfileRepository.save(profile);
-            } else if (alumniType === 'teacher') {
-                let profile = await this.teacherProfileRepository.findOne({ where: { userId } });
-                if (!profile) {
-                    profile = this.teacherProfileRepository.create({ userId, ...profileData });
-                } else {
-                    Object.assign(profile, profileData);
-                }
-                await this.teacherProfileRepository.save(profile);
+            const userId = parseInt(id);
+            if (isNaN(userId)) {
+                throw new Error('Invalid user ID');
             }
+
+            const user = await this.userRepository.findOne({ where: { id: userId } });
+            if (!user) {
+                throw new Error('User not found');
+            }
+
+            // Validate and merge additional information
+            const validatedInfo = this.validateAdditionalInformation(additionalInfo, user.alumni_type);
+
+            // Merge with existing additional_information
+            const existingInfo = user.additional_information || {};
+            user.additional_information = { ...existingInfo, ...validatedInfo };
+
+            const updatedUser = await this.userRepository.save(user);
+            const { password, ...userWithoutPassword } = updatedUser;
+            return userWithoutPassword;
         } catch (error) {
-            console.error('Update profile data error:', error);
+            console.error('Update additional information error:', error);
             throw error;
         }
     }
 
-    async updateEducation(userId, educationData) {
+    validateAdditionalInformation(additionalInfo, alumniType) {
+        if (!additionalInfo || typeof additionalInfo !== 'object') {
+            return {};
+        }
+
+        const validated = {};
+
+        // Common fields for all alumni types
+        if (additionalInfo.achievements && Array.isArray(additionalInfo.achievements)) {
+            validated.achievements = additionalInfo.achievements
+                .filter(achievement => typeof achievement === 'string' && achievement.trim().length > 0)
+                .map(achievement => achievement.trim())
+                .slice(0, 50); // Limit to 50 achievements
+        }
+
+        if (additionalInfo.education && Array.isArray(additionalInfo.education)) {
+            validated.education = additionalInfo.education
+                .filter(edu => edu && typeof edu === 'object')
+                .map(edu => ({
+                    degree: edu.degree ? String(edu.degree).trim().substring(0, 200) : '',
+                    institution: edu.institution ? String(edu.institution).trim().substring(0, 200) : '',
+                    year: this.validateYear(edu.year),
+                    grade: edu.grade ? String(edu.grade).trim().substring(0, 50) : ''
+                }))
+                .slice(0, 20); // Limit to 20 education records
+        }
+
+        if (additionalInfo.experience && Array.isArray(additionalInfo.experience)) {
+            validated.experience = additionalInfo.experience
+                .filter(exp => exp && typeof exp === 'object')
+                .map(exp => ({
+                    position: exp.position ? String(exp.position).trim().substring(0, 200) : '',
+                    organization: exp.organization ? String(exp.organization).trim().substring(0, 200) : '',
+                    institution: exp.institution ? String(exp.institution).trim().substring(0, 200) : '',
+                    period: exp.period ? String(exp.period).trim().substring(0, 100) : '',
+                    description: exp.description ? String(exp.description).trim().substring(0, 1000) : ''
+                }))
+                .slice(0, 20); // Limit to 20 experience records
+        }
+
+        // Student-specific fields
+        if (alumniType === 'student') {
+            if (additionalInfo.class) {
+                validated.class = String(additionalInfo.class).trim().substring(0, 10);
+            }
+
+            if (additionalInfo.currentPosition) {
+                validated.currentPosition = String(additionalInfo.currentPosition).trim().substring(0, 200);
+            }
+
+            if (additionalInfo.organization) {
+                validated.organization = String(additionalInfo.organization).trim().substring(0, 200);
+            }
+
+            if (additionalInfo.joinedYear) {
+                validated.joinedYear = this.validateYear(additionalInfo.joinedYear);
+            }
+
+            if (additionalInfo.graduatedYear) {
+                validated.graduatedYear = this.validateYear(additionalInfo.graduatedYear);
+            }
+
+            if (additionalInfo.quotes) {
+                validated.quotes = String(additionalInfo.quotes).trim().substring(0, 2000);
+            }
+
+            if (additionalInfo.socialMedia && typeof additionalInfo.socialMedia === 'object') {
+                validated.socialMedia = this.validateSocialMedia(additionalInfo.socialMedia);
+            }
+
+            if (additionalInfo.socialContributions && Array.isArray(additionalInfo.socialContributions)) {
+                validated.socialContributions = additionalInfo.socialContributions
+                    .filter(contrib => typeof contrib === 'string' && contrib.trim().length > 0)
+                    .map(contrib => contrib.trim().substring(0, 500))
+                    .slice(0, 20);
+            }
+        }
+
+        // Teacher/Management-specific fields
+        if (alumniType === 'teacher' || alumniType === 'management') {
+            if (additionalInfo.designation) {
+                validated.designation = String(additionalInfo.designation).trim().substring(0, 100);
+            }
+
+            if (additionalInfo.department) {
+                validated.department = String(additionalInfo.department).trim().substring(0, 100);
+            }
+
+            if (additionalInfo.period) {
+                validated.period = String(additionalInfo.period).trim().substring(0, 50);
+            }
+
+            if (additionalInfo.subject) {
+                validated.subject = String(additionalInfo.subject).trim().substring(0, 100);
+            }
+
+            if (additionalInfo.specialization) {
+                validated.specialization = String(additionalInfo.specialization).trim().substring(0, 200);
+            }
+
+            if (additionalInfo.quote) {
+                validated.quote = String(additionalInfo.quote).trim().substring(0, 2000);
+            }
+
+            if (additionalInfo.officeHours) {
+                validated.officeHours = String(additionalInfo.officeHours).trim().substring(0, 100);
+            }
+
+            if (additionalInfo.publications && Array.isArray(additionalInfo.publications)) {
+                validated.publications = additionalInfo.publications
+                    .filter(pub => pub && typeof pub === 'object')
+                    .map(pub => ({
+                        title: pub.title ? String(pub.title).trim().substring(0, 300) : '',
+                        year: this.validateYear(pub.year),
+                        publisher: pub.publisher ? String(pub.publisher).trim().substring(0, 200) : ''
+                    }))
+                    .slice(0, 50);
+            }
+
+            if (additionalInfo.studentsFeedback && Array.isArray(additionalInfo.studentsFeedback)) {
+                validated.studentsFeedback = additionalInfo.studentsFeedback
+                    .filter(feedback => feedback && typeof feedback === 'object')
+                    .map(feedback => ({
+                        name: feedback.name ? String(feedback.name).trim().substring(0, 100) : '',
+                        batch: feedback.batch ? String(feedback.batch).trim().substring(0, 50) : '',
+                        feedback: feedback.feedback ? String(feedback.feedback).trim().substring(0, 1000) : ''
+                    }))
+                    .slice(0, 100);
+            }
+        }
+
+        return validated;
+    }
+
+    validateYear(year) {
+        if (!year) return null;
+        const numYear = parseInt(year);
+        if (isNaN(numYear) || numYear < 1950 || numYear > new Date().getFullYear() + 10) {
+            return null;
+        }
+        return numYear;
+    }
+
+    validateSocialMedia(socialMedia) {
+        if (!socialMedia || typeof socialMedia !== 'object') {
+            return {};
+        }
+
+        const validated = {};
+        const allowedPlatforms = ['linkedin', 'twitter', 'facebook', 'instagram'];
+
+        for (const [platform, url] of Object.entries(socialMedia)) {
+            if (allowedPlatforms.includes(platform) && url && typeof url === 'string') {
+                if (url.length <= 500 && this.isValidUrl(url)) {
+                    validated[platform] = url;
+                }
+            }
+        }
+
+        return validated;
+    }
+
+    isValidUrl(string) {
         try {
-            // Remove existing education records
-            await this.educationRepository.delete({ userId });
-
-            // Add new education records
-            const educationRecords = educationData.map(edu => ({
-                ...edu,
-                userId
-            }));
-
-            await this.educationRepository.save(educationRecords);
-        } catch (error) {
-            console.error('Update education error:', error);
-            throw error;
+            const url = new URL(string);
+            return url.protocol === 'http:' || url.protocol === 'https:';
+        } catch (_) {
+            return false;
         }
     }
-
-    async updateExperience(userId, experienceData) {
-        try {
-            await this.experienceRepository.delete({ userId });
-
-            const experienceRecords = experienceData.map(exp => ({
-                ...exp,
-                userId
-            }));
-
-            await this.experienceRepository.save(experienceRecords);
-        } catch (error) {
-            console.error('Update experience error:', error);
-            throw error;
-        }
-    }
-
-    // async updateAchievements(userId, achievementsData) {
-    //     try {
-    //         await this.achievementRepository.delete({ userId });
-
-    //         const achievementRecords = achievementsData.map(achievement => ({
-    //             description: achievement,
-    //             userId
-    //         }));
-
-    //         await this.achievementRepository.save(achievementRecords);
-    //     } catch (error) {
-    //         console.error('Update achievements error:', error);
-    //         throw error;
-    //     }
-    // }
-
-    // async updatePublications(userId, publicationsData) {
-    //     try {
-    //         await this.publicationRepository.delete({ userId });
-
-    //         const publicationRecords = publicationsData.map(pub => ({
-    //             ...pub,
-    //             userId
-    //         }));
-
-    //         await this.publicationRepository.save(publicationRecords);
-    //     } catch (error) {
-    //         console.error('Update publications error:', error);
-    //         throw error;
-    //     }
-    // }
 
     async updateStatus(id, status) {
         try {
