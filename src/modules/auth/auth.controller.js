@@ -52,7 +52,8 @@ class AuthController {
 
                     const token = generateToken({
                         email: user.email,
-                        id: user.id
+                        id: user.id,
+                        roles: user.roles || ['user'] // Include roles in JWT token
                     });
 
                     console.log('Google login successful:', token);

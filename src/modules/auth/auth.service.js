@@ -115,7 +115,8 @@ class AuthService {
 
             const token = generateToken({
                 email: user.email,
-                id: user.id
+                id: user.id,
+                roles: user.roles // Include roles in JWT token
             });
 
             return { user: userWithoutPassword, token };

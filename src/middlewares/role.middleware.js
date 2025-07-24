@@ -1,68 +1,80 @@
-import jwt from 'jsonwebtoken';
-import { AuthService } from '../modules/auth/auth.service.js';
+import { ResponseHandler } from '../utils/responseHandler.js';
 
 /**
  * Middleware to check if user has required roles
- * @param {string|string[]} requiredRoles - Single role or array of roles
- * @returns {Function} Express middleware function
+ * @param {Array} allowedRoles - Array of roles that can access the endpoint
+ * @returns {Function} - Express middleware function
  */
-export const roleMiddleware = (requiredRoles) => {
-    return async (req, res, next) => {
-        try {
-            // Ensure user is authenticated first
-            const authHeader = req.headers.authorization;
-
-            if (!authHeader || !authHeader.startsWith('Bearer ')) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'Access token required'
-                });
-            }
-
-            const token = authHeader.substring(7);
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-            // Get user with roles
-            const authService = new AuthService();
-            const user = await authService.getUserByEmail(decoded.email);
-
-            if (!user) {
-                return res.status(401).json({
-                    success: false,
-                    error: 'User not found'
-                });
-            }
-
-            // Check roles
-            const userRoles = user.roles || ['user'];
-            const requiredRolesArray = Array.isArray(requiredRoles) ? requiredRoles : [requiredRoles];
-
-            const hasRequiredRole = requiredRolesArray.some(role => userRoles.includes(role));
-
-            if (!hasRequiredRole) {
-                return res.status(403).json({
-                    success: false,
-                    error: 'Insufficient permissions',
-                    message: `Required roles: ${requiredRolesArray.join(', ')}. User roles: ${userRoles.join(', ')}`
-                });
-            }
-
-            // Add user info to request
-            req.user = { ...decoded, roles: userRoles, fullUser: user };
-            next();
-        } catch (error) {
-            console.error('Role middleware error:', error);
-            return res.status(401).json({
-                success: false,
-                error: 'Invalid or expired token'
-            });
+export const requireRoles = (allowedRoles) => {
+    return (req, res, next) => {
+        // Check if user is authenticated
+        if (!req.user) {
+            return ResponseHandler.unauthorized(res, 'Authentication required');
         }
+
+        // Get user roles from the authenticated user
+        const userRoles = req.user.roles || [];
+
+        // Check if user has any of the required roles
+        const hasRequiredRole = allowedRoles.some(role => userRoles.includes(role));
+
+        if (!hasRequiredRole) {
+            return ResponseHandler.forbidden(res, `Access denied. Required roles: ${allowedRoles.join(', ')}`);
+        }
+
+        next();
     };
 };
 
 /**
- * Predefined role middlewares for common use cases
+ * Middleware to check admin role specifically
  */
-export const requireAdmin = roleMiddleware(['admin']);
-export const requireModerator = roleMiddleware(['admin', 'moderator']);
-export const requireUser = roleMiddleware(['user', 'admin', 'moderator']);
+export const requireAdmin = requireRoles(['admin']);
+
+/**
+ * Middleware to check admin or moderator roles
+ */
+export const requireAdminOrModerator = requireRoles(['admin', 'moderator']);
+
+/**
+ * Special middleware for role removal - prevents removing admin role unless user is admin
+ * and prevents users from removing their own admin role
+ */
+export const requireRoleRemovalPermission = async (req, res, next) => {
+    try {
+        const { role } = req.body;
+        const targetUserId = parseInt(req.params.id);
+        const currentUser = req.user;
+
+        // Only admin can remove admin role
+        if (role === 'admin' && !currentUser.roles.includes('admin')) {
+            return ResponseHandler.forbidden(res, 'Only admins can remove admin role');
+        }
+
+        // Prevent self-removal of admin role (to avoid locking out the system)
+        if (role === 'admin' && currentUser.id === targetUserId) {
+            return ResponseHandler.forbidden(res, 'Cannot remove your own admin role');
+        }
+
+        // Admin can remove any role, moderator can only remove non-admin roles
+        if (!currentUser.roles.includes('admin') && role === 'admin') {
+            return ResponseHandler.forbidden(res, 'Insufficient permissions to remove admin role');
+        }
+
+        // Moderators can remove moderator and user roles (but not admin)
+        if (currentUser.roles.includes('moderator') && !currentUser.roles.includes('admin')) {
+            if (role !== 'admin') {
+                return next();
+            }
+        }
+
+        // Admin can do anything
+        if (currentUser.roles.includes('admin')) {
+            return next();
+        }
+
+        return ResponseHandler.forbidden(res, 'Insufficient permissions');
+    } catch (error) {
+        return ResponseHandler.error(res, error, 'Permission check failed');
+    }
+};

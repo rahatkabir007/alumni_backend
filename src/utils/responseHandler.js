@@ -39,6 +39,15 @@ class ResponseHandler {
     static serverError(res, error, message = 'Internal server error') {
         return this.error(res, error, message, 500);
     }
+
+    static forbidden(res, message = 'Forbidden') {
+        return res.status(403).json({
+            success: false,
+            message,
+            error: 'Forbidden'
+        });
+    }
+
 }
 
 export { ResponseHandler };
