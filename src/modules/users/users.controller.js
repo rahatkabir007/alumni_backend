@@ -69,6 +69,18 @@ class UsersController {
             return ResponseHandler.success(res, result, 'User role updated successfully');
         }));
 
+        app.patch('/users/:id/role/remove', authMiddleware, asyncHandler(async (req, res) => {
+            const { role } = req.body;
+            if (!role) {
+                return ResponseHandler.error(res, new Error('Role is required'), 'Role is required');
+            }
+            const result = await this.usersService.removeRole(req.params.id, role);
+            if (!result) {
+                return ResponseHandler.notFound(res, 'User not found');
+            }
+            return ResponseHandler.success(res, result, 'User role removed successfully');
+        }));
+
         // Delete user
         app.delete('/users/:id', authMiddleware, asyncHandler(async (req, res) => {
             const result = await this.usersService.deleteUser(req.params.id);
