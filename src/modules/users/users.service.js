@@ -1,5 +1,11 @@
 import { getDataSource } from "../../config/database.js";
 import { User } from "../../entities/User.js";
+import { StudentProfile } from "../../entities/StudentProfile.js";
+import { TeacherProfile } from "../../entities/TeacherProfile.js";
+import { Education } from "../../entities/Education.js";
+import { Experience } from "../../entities/Experience.js";
+// import { Achievement } from "../../entities/Achievement.js";
+// import { Publication } from "../../entities/Publication.js";
 import {
     sanitizeName,
     validatePhone,
@@ -10,12 +16,20 @@ import {
     validateBio,
     validateLeftAtYear
 } from "../../helpers/validation.helper.js";
+import { ManagementProfile } from "../../entities/ManagementProfile.js";
 
 class UsersService {
     constructor() {
         try {
             this.dataSource = getDataSource();
             this.userRepository = this.dataSource.getRepository(User);
+            this.studentProfileRepository = this.dataSource.getRepository(StudentProfile);
+            this.teacherProfileRepository = this.dataSource.getRepository(TeacherProfile);
+            this.managementProfileRepository = this.dataSource.getRepository(ManagementProfile);
+            this.educationRepository = this.dataSource.getRepository(Education);
+            this.experienceRepository = this.dataSource.getRepository(Experience);
+            // this.achievementRepository = this.dataSource.getRepository(Achievement);
+            // this.publicationRepository = this.dataSource.getRepository(Publication);
         } catch (error) {
             console.error('Error initializing UsersService:', error);
             throw error;
@@ -35,7 +49,8 @@ class UsersService {
                 isGraduated = '',
                 graduation_year = '',
                 status = '',
-                role = ''
+                role = '',
+                includeProfile = false
             } = queryParams;
 
             // Validate pagination parameters
@@ -54,33 +69,25 @@ class UsersService {
             const validSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
             const validSortOrder = ['ASC', 'DESC'].includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : 'DESC';
 
-            // Build query
+            // Build query with optional profile data
             const queryBuilder = this.userRepository.createQueryBuilder('user');
 
             // Select fields (exclude password)
             queryBuilder.select([
-                'user.id',
-                'user.email',
-                'user.name',
-                'user.phone',
-                'user.alumni_type',
-                'user.status',
-                'user.blood_group',
-                'user.location',
-                'user.profession',
-                'user.graduation_year',
-                'user.batch',
-                'user.bio',
-                'user.isActive',
-                'user.isGraduated',
-                'user.left_at',
-                'user.profilePhoto',
-                'user.profilePhotoSource',
-                'user.roles',
-                'user.provider',
-                'user.created_at',
-                'user.updated_at'
+                'user.id', 'user.email', 'user.name', 'user.phone', 'user.alumni_type',
+                'user.status', 'user.blood_group', 'user.location', 'user.profession',
+                'user.graduation_year', 'user.batch', 'user.bio', 'user.isActive',
+                'user.isGraduated', 'user.left_at', 'user.profilePhoto',
+                'user.profilePhotoSource', 'user.roles', 'user.provider',
+                'user.created_at', 'user.updated_at'
             ]);
+
+            // Include profile data if requested
+            if (includeProfile) {
+                queryBuilder
+                    .leftJoinAndSelect('user.studentProfile', 'studentProfile')
+                    .leftJoinAndSelect('user.teacherProfile', 'teacherProfile');
+            }
 
             // Apply search filter
             if (search && search.trim()) {
@@ -173,22 +180,37 @@ class UsersService {
             throw error;
         }
     }
-    async getUserById(id) {
+    async getUserById(id, includeDetails = false) {
         try {
             const userId = parseInt(id);
             if (isNaN(userId)) {
                 throw new Error('Invalid user ID');
             }
 
-            return await this.userRepository.findOne({
-                where: { id: userId },
-                select: [
-                    'id', 'email', 'name', 'phone', 'location', 'profession', 'alumni_type', 'blood_group', 'status',
-                    'graduation_year', 'batch', 'bio', 'isActive', 'isGraduated',
-                    'left_at', 'profilePhoto', 'profilePhotoSource', 'roles',
-                    'provider', 'created_at', 'updated_at'
-                ]
-            });
+            const queryBuilder = this.userRepository.createQueryBuilder('user')
+                .where('user.id = :id', { id: userId })
+                .select([
+                    'user.id', 'user.email', 'user.name', 'user.phone', 'user.location',
+                    'user.profession', 'user.alumni_type', 'user.blood_group', 'user.status',
+                    'user.graduation_year', 'user.batch', 'user.bio', 'user.isActive',
+                    'user.isGraduated', 'user.left_at', 'user.profilePhoto',
+                    'user.profilePhotoSource', 'user.roles', 'user.provider',
+                    'user.created_at', 'user.updated_at'
+                ]);
+
+            if (includeDetails) {
+                // Include profile based on alumni type
+                queryBuilder
+                    .leftJoinAndSelect('user.studentProfile', 'studentProfile')
+                    .leftJoinAndSelect('user.teacherProfile', 'teacherProfile')
+                    .leftJoinAndSelect('user.managementProfile', 'managementProfile')
+                    .leftJoinAndSelect('user.education', 'education')
+                    .leftJoinAndSelect('user.experience', 'experience')
+                // .leftJoinAndSelect('user.achievements', 'achievements')
+                // .leftJoinAndSelect('user.publications', 'publications');
+            }
+
+            return await queryBuilder.getOne();
         } catch (error) {
             console.error('Get user by ID error:', error);
             throw error;
@@ -208,15 +230,9 @@ class UsersService {
                 throw new Error('User not found');
             }
 
-            // Validate and sanitize allowed fields
-            const allowedFields = [
-                'name', 'phone', 'location', 'profession', 'graduation_year',
-                'batch', 'bio', 'isGraduated', 'left_at'
-            ];
-
+            // Handle base user fields
             const validatedData = {};
 
-            // Validate each field if provided
             if (updateData.name !== undefined) {
                 validatedData.name = sanitizeName(updateData.name);
             }
@@ -260,14 +276,15 @@ class UsersService {
                     throw new Error('Invalid blood group');
                 }
             }
+
             if (updateData.alumni_type !== undefined) {
                 if (['student', 'teacher', 'management'].includes(updateData.alumni_type)) {
                     validatedData.alumni_type = updateData.alumni_type;
-                }
-                else {
+                } else {
                     throw new Error('Invalid alumni type');
                 }
             }
+
             if (updateData.profilePhotoSource !== undefined) {
                 if (['google', 'manual'].includes(updateData.profilePhotoSource)) {
                     validatedData.profilePhotoSource = updateData.profilePhotoSource;
@@ -275,6 +292,7 @@ class UsersService {
                     throw new Error('Invalid profile photo source');
                 }
             }
+
             if (updateData.profilePhoto !== undefined) {
                 if (typeof updateData.profilePhoto === 'string' && updateData.profilePhoto.length <= 500) {
                     validatedData.profilePhoto = updateData.profilePhoto;
@@ -283,11 +301,31 @@ class UsersService {
                 }
             }
 
-
-
-            // Apply validated changes
+            // Apply validated changes to user
             Object.assign(user, validatedData);
             const updatedUser = await this.userRepository.save(user);
+
+            // Handle profile-specific data based on alumni_type
+            if (updateData.profileData) {
+                await this.updateProfileData(userId, user.alumni_type, updateData.profileData);
+            }
+
+            // Handle related entities
+            if (updateData.education) {
+                await this.updateEducation(userId, updateData.education);
+            }
+
+            if (updateData.experience) {
+                await this.updateExperience(userId, updateData.experience);
+            }
+
+            if (updateData.achievements) {
+                await this.updateAchievements(userId, updateData.achievements);
+            }
+
+            if (updateData.publications) {
+                await this.updatePublications(userId, updateData.publications);
+            }
 
             const { password, ...userWithoutPassword } = updatedUser;
             return userWithoutPassword;
@@ -296,6 +334,97 @@ class UsersService {
             throw error;
         }
     }
+
+    async updateProfileData(userId, alumniType, profileData) {
+        try {
+            if (alumniType === 'student') {
+                let profile = await this.studentProfileRepository.findOne({ where: { userId } });
+                if (!profile) {
+                    profile = this.studentProfileRepository.create({ userId, ...profileData });
+                } else {
+                    Object.assign(profile, profileData);
+                }
+                await this.studentProfileRepository.save(profile);
+            } else if (alumniType === 'teacher') {
+                let profile = await this.teacherProfileRepository.findOne({ where: { userId } });
+                if (!profile) {
+                    profile = this.teacherProfileRepository.create({ userId, ...profileData });
+                } else {
+                    Object.assign(profile, profileData);
+                }
+                await this.teacherProfileRepository.save(profile);
+            }
+        } catch (error) {
+            console.error('Update profile data error:', error);
+            throw error;
+        }
+    }
+
+    async updateEducation(userId, educationData) {
+        try {
+            // Remove existing education records
+            await this.educationRepository.delete({ userId });
+
+            // Add new education records
+            const educationRecords = educationData.map(edu => ({
+                ...edu,
+                userId
+            }));
+
+            await this.educationRepository.save(educationRecords);
+        } catch (error) {
+            console.error('Update education error:', error);
+            throw error;
+        }
+    }
+
+    async updateExperience(userId, experienceData) {
+        try {
+            await this.experienceRepository.delete({ userId });
+
+            const experienceRecords = experienceData.map(exp => ({
+                ...exp,
+                userId
+            }));
+
+            await this.experienceRepository.save(experienceRecords);
+        } catch (error) {
+            console.error('Update experience error:', error);
+            throw error;
+        }
+    }
+
+    // async updateAchievements(userId, achievementsData) {
+    //     try {
+    //         await this.achievementRepository.delete({ userId });
+
+    //         const achievementRecords = achievementsData.map(achievement => ({
+    //             description: achievement,
+    //             userId
+    //         }));
+
+    //         await this.achievementRepository.save(achievementRecords);
+    //     } catch (error) {
+    //         console.error('Update achievements error:', error);
+    //         throw error;
+    //     }
+    // }
+
+    // async updatePublications(userId, publicationsData) {
+    //     try {
+    //         await this.publicationRepository.delete({ userId });
+
+    //         const publicationRecords = publicationsData.map(pub => ({
+    //             ...pub,
+    //             userId
+    //         }));
+
+    //         await this.publicationRepository.save(publicationRecords);
+    //     } catch (error) {
+    //         console.error('Update publications error:', error);
+    //         throw error;
+    //     }
+    // }
 
     async updateStatus(id, status) {
         try {

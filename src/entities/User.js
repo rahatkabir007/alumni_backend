@@ -129,4 +129,36 @@ export const User = new EntitySchema({
             updateDate: true,
         },
     },
+    relations: {
+        studentProfile: {
+            type: 'one-to-one',
+            target: 'StudentProfile',
+            inverseSide: 'user',
+            cascade: true,
+        },
+        teacherProfile: {
+            type: 'one-to-one',
+            target: 'TeacherProfile',
+            inverseSide: 'user',
+            cascade: true,
+        },
+        managementProfile: {
+            type: 'one-to-one',
+            target: 'ManagementProfile',
+            inverseSide: 'user',
+            cascade: true,
+        },
+        education: {
+            type: 'one-to-many',
+            target: 'Education',
+            inverseSide: 'user',
+            cascade: true,
+        },
+        experience: {
+            type: 'one-to-many',
+            target: 'Experience',
+            inverseSide: 'user',
+            cascade: true,
+        },
+    },
 });

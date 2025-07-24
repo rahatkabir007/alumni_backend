@@ -3,12 +3,21 @@ import { getDataSource } from '../../config/database.js';
 import { User } from '../../entities/User.js';
 import { generateToken } from '../../utils/jwtSign.js';
 import { extractProfilePhoto, extractUserName, shouldUpdateProfilePhoto } from '../../helpers/oauth.helper.js';
-
+import { StudentProfile } from "../../entities/StudentProfile.js";
+import { TeacherProfile } from "../../entities/TeacherProfile.js";
+import { Education } from "../../entities/Education.js";
+import { Experience } from "../../entities/Experience.js";
+import { ManagementProfile } from '../../entities/ManagementProfile.js';
 class AuthService {
     constructor() {
         try {
             this.dataSource = getDataSource();
             this.userRepository = this.dataSource.getRepository(User);
+            this.studentProfileRepository = this.dataSource.getRepository(StudentProfile);
+            this.teacherProfileRepository = this.dataSource.getRepository(TeacherProfile);
+            this.managementProfileRepository = this.dataSource.getRepository(ManagementProfile);
+            this.educationRepository = this.dataSource.getRepository(Education);
+            this.experienceRepository = this.dataSource.getRepository(Experience);
         } catch (error) {
             console.error('Error initializing AuthService:', error);
             throw error;
@@ -126,9 +135,8 @@ class AuthService {
         }
     }
 
-    async getAuthenticatedUserData(user) {
+    async getAuthenticatedUserData(user, includeDetails = true) {
         try {
-            console.log(user)
             if (!user || !user.email) {
                 throw new Error('User not authenticated');
             }
@@ -141,8 +149,30 @@ class AuthService {
                 throw new Error('User not found');
             }
 
-            const { password, ...userWithoutPassword } = userData;
-            return userWithoutPassword;
+            const queryBuilder = this.userRepository.createQueryBuilder('user')
+                .where('user.id = :id', { id: userData.id })
+                .select([
+                    'user.id', 'user.email', 'user.name', 'user.phone', 'user.location',
+                    'user.profession', 'user.alumni_type', 'user.blood_group', 'user.status',
+                    'user.graduation_year', 'user.batch', 'user.bio', 'user.isActive',
+                    'user.isGraduated', 'user.left_at', 'user.profilePhoto',
+                    'user.profilePhotoSource', 'user.roles', 'user.provider',
+                    'user.created_at', 'user.updated_at'
+                ]);
+
+            if (includeDetails) {
+                // Include profile based on alumni type
+                queryBuilder
+                    .leftJoinAndSelect('user.studentProfile', 'studentProfile')
+                    .leftJoinAndSelect('user.teacherProfile', 'teacherProfile')
+                    .leftJoinAndSelect('user.managementProfile', 'managementProfile')
+                    .leftJoinAndSelect('user.education', 'education')
+                    .leftJoinAndSelect('user.experience', 'experience')
+                // .leftJoinAndSelect('user.achievements', 'achievements')
+                // .leftJoinAndSelect('user.publications', 'publications');
+            }
+
+            return await queryBuilder.getOne();
         } catch (error) {
             console.error('Error fetching authenticated user data:', error);
             throw error;
