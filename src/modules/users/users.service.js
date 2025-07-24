@@ -261,8 +261,16 @@ class UsersService {
 
             // Handle additional_information field
             if (updateData.additional_information !== undefined) {
+                let additionalInfo = updateData.additional_information;
+                if (typeof additionalInfo === 'string') {
+                    try {
+                        additionalInfo = JSON.parse(additionalInfo);
+                    } catch (e) {
+                        throw new Error('Invalid JSON for additional_information');
+                    }
+                }
                 validatedData.additional_information = this.validateAdditionalInformation(
-                    updateData.additional_information,
+                    additionalInfo,
                     user.alumni_type
                 );
             }
