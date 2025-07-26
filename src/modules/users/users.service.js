@@ -35,7 +35,8 @@ class UsersService {
                 isGraduated = '',
                 graduation_year = '',
                 status = '',
-                role = ''
+                role = '',
+                excludeAdmins = false
             } = queryParams;
 
             // Validate pagination parameters
@@ -124,6 +125,10 @@ class UsersService {
             queryBuilder.skip(offset).take(limitNum);
 
             // Execute query
+            if (excludeAdmins) {
+                // Fix: Use CAST to jsonb and compare with JSON array string
+                queryBuilder.andWhere(`CAST(user.roles AS jsonb) @> :adminRole = false`, { adminRole: '["admin"]' });
+            }
             const users = await queryBuilder.getMany();
 
             // Calculate pagination metadata

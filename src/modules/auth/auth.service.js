@@ -173,7 +173,8 @@ class AuthService {
                 email,
                 name: extractedName,
                 photo: extractedPhoto,
-                provider
+                provider,
+                status: 'pending',
             });
 
             let user = await this.userRepository.findOne({

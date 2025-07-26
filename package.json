@@ -9,9 +9,9 @@
   },
   "scripts": {
     "start": "node src/main.js",
-    "dev": "node src/main.js",
-    "dev:local": "nodemon --env-file=.env.local src/main.js",
-    "dev:prod": "nodemon --env-file=.env.production src/main.js",
+    "dev": "nodemon src/main.js",
+    "dev:local": "nodemon src/main.js",
+    "dev:prod": "nodemon src/main.js",
     "test:prod-local": "node test-prod-local.js",
     "debug:env": "node -e \"console.log(process.env)\"",
     "test": "echo \"Error: no test specified\" && exit 1",

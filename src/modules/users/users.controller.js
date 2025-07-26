@@ -23,13 +23,13 @@ class UsersController {
         }));
 
         // Enhanced users endpoint with pagination, sorting, and search
-        app.get('/users', authMiddleware, asyncHandler(async (req, res) => {
+        app.get('/users', asyncHandler(async (req, res) => {
             const result = await this.usersService.getUsers(req.query);
             return ResponseHandler.success(res, result, 'Users retrieved successfully');
         }));
 
         // Get user by ID with optional profile details
-        app.get('/users/:id', authMiddleware, asyncHandler(async (req, res) => {
+        app.get('/users/:id', asyncHandler(async (req, res) => {
             const includeDetails = req.query.includeDetails === 'true';
             const result = await this.usersService.getUserById(req.params.id, includeDetails);
 
