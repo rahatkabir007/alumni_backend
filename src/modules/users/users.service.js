@@ -22,7 +22,7 @@ class UsersService {
         }
     }
 
-    async getUsers(queryParams = {}) {
+    async getUsers(queryParams = {}, verified) {
         try {
             const {
                 page = 1,
@@ -36,7 +36,8 @@ class UsersService {
                 graduation_year = '',
                 status = '',
                 role = '',
-                excludeAdmins = false
+                excludeAdmins = false,
+                alumni_type = '',
             } = queryParams;
 
             // Validate pagination parameters
@@ -115,8 +116,26 @@ class UsersService {
                     { rolePattern: `%"${role.trim()}"%` }
                 );
             }
+
+            if (alumni_type && alumni_type.trim()) {
+                queryBuilder.andWhere('user.alumni_type  ILIKE :alumni_type', { alumni_type: alumni_type.trim() });
+            }
             // Apply sorting
             queryBuilder.orderBy(`user.${validSortBy}`, validSortOrder);
+
+
+
+            // Execute query
+            if (excludeAdmins) {
+                // Fix: Use CAST to jsonb and compare with JSON array string
+                queryBuilder.andWhere(`CAST(user.roles AS jsonb) @> :adminRole = false`, { adminRole: '["admin"]' });
+            }
+
+            if (verified.verified === true) {
+                queryBuilder.andWhere('user.status = :status', { status: 'active' });
+            }
+
+
 
             // Get total count for pagination
             const totalItems = await queryBuilder.getCount();
@@ -124,11 +143,6 @@ class UsersService {
             // Apply pagination
             queryBuilder.skip(offset).take(limitNum);
 
-            // Execute query
-            if (excludeAdmins) {
-                // Fix: Use CAST to jsonb and compare with JSON array string
-                queryBuilder.andWhere(`CAST(user.roles AS jsonb) @> :adminRole = false`, { adminRole: '["admin"]' });
-            }
             const users = await queryBuilder.getMany();
 
             // Calculate pagination metadata

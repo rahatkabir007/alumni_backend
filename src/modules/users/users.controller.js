@@ -28,6 +28,12 @@ class UsersController {
             return ResponseHandler.success(res, result, 'Users retrieved successfully');
         }));
 
+        app.get('/users/verified', asyncHandler(async (req, res) => {
+            const result = await this.usersService.getUsers(req.query, { verified: true });
+            return ResponseHandler.success(res, result, 'Users retrieved successfully');
+        }));
+
+
         // Get user by ID with optional profile details
         app.get('/users/:id', asyncHandler(async (req, res) => {
             const includeDetails = req.query.includeDetails === 'true';
