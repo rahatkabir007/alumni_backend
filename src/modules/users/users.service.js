@@ -49,7 +49,7 @@ class UsersService {
             const allowedSortFields = [
                 'created_at', 'updated_at', 'name', 'email', 'phone', 'location',
                 'profession', 'graduation_year', 'batch', 'bio', 'isActive', 'roles',
-                'isGraduated', 'left_at', 'profilePhotoSource', 'alumni_type', 'status',
+                'isGraduated', 'left_at', 'joinedYear', 'profilePhotoSource', 'alumni_type', 'status',
                 'blood_group', 'profilePhoto',
             ];
 
@@ -64,7 +64,7 @@ class UsersService {
                 'user.id', 'user.email', 'user.name', 'user.phone', 'user.alumni_type',
                 'user.status', 'user.blood_group', 'user.location', 'user.profession',
                 'user.graduation_year', 'user.batch', 'user.bio', 'user.isActive',
-                'user.isGraduated', 'user.left_at', 'user.profilePhoto',
+                'user.isGraduated', 'user.left_at', 'user.joinedYear', 'user.profilePhoto',
                 'user.profilePhotoSource', 'user.roles', 'user.provider',
                 'user.created_at', 'user.updated_at'
             ]);
@@ -176,7 +176,7 @@ class UsersService {
                 'id', 'email', 'name', 'phone', 'location',
                 'profession', 'alumni_type', 'blood_group', 'status',
                 'graduation_year', 'batch', 'bio', 'isActive',
-                'isGraduated', 'left_at', 'profilePhoto',
+                'isGraduated', 'left_at', 'joinedYear', 'profilePhoto',
                 'profilePhotoSource', 'roles', 'provider',
                 'created_at', 'updated_at'
             ];
@@ -245,9 +245,17 @@ class UsersService {
             if (updateData.left_at !== undefined) {
                 validatedData.left_at = validateLeftAtYear(updateData.left_at);
             }
+            if (updateData.joinedYear !== undefined) {
+                const joinedYear = parseInt(updateData.joinedYear);
+                if (!isNaN(joinedYear) && joinedYear >= 1998 && joinedYear <= new Date().getFullYear() + 10) {
+                    validatedData.joinedYear = joinedYear;
+                } else {
+                    throw new Error('Invalid joined year');
+                }
+            }
 
             if (updateData.blood_group !== undefined) {
-                if (['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].includes(updateData.blood_group)) {
+                if (['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].includes(updateData.blood_group) || updateData.blood_group === "") {
                     validatedData.blood_group = updateData.blood_group;
                 } else {
                     throw new Error('Invalid blood group');

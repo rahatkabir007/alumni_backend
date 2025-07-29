@@ -81,6 +81,11 @@ export const User = new EntitySchema({
             nullable: true,
             comment: 'Year when user left school (if not graduated)'
         },
+        joinedYear: {
+            type: 'int',
+            nullable: true,
+            comment: 'Year when user joined the school'
+        },
         profilePhoto: {
             type: 'varchar',
             length: 500,
