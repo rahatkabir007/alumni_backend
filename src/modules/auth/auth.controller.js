@@ -95,6 +95,25 @@ class AuthController {
             const userData = await this.authService.getAuthenticatedUserData(user);
             return ResponseHandler.success(res, userData, 'User data retrieved successfully');
         }));
+
+        app.post('/auth/complete-profile', authMiddleware, asyncHandler(async (req, res) => {
+            const userId = req.body.userId;
+            const profileData = req.body;
+
+            if (!profileData || Object.keys(profileData).length === 0) {
+                return ResponseHandler.error(res, new Error('Profile data is required'), 'Profile data is required');
+            }
+
+
+            const updatedUser = await this.authService.completeUserProfile(userId, profileData);
+            const token = generateToken({
+                email: updatedUser.email,
+                id: updatedUser.id,
+                roles: updatedUser.roles || ['user'],
+                isProfileCompleted: true,
+            });
+            return ResponseHandler.success(res, { user: updatedUser, token }, 'Profile completed successfully');
+        }));
     }
 }
 

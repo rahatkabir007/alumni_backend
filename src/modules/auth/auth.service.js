@@ -276,6 +276,30 @@ class AuthService {
         }
     }
 
+    async completeUserProfile(userId, profileData) {
+        try {
+            const user = await this.userRepository.findOne({
+                where: { id: userId }
+            });
+
+            if (!user) {
+                throw new Error('User not found');
+            }
+
+            // Update user profile data
+            Object.assign(user, profileData);
+            user.isProfileCompleted = true; // Mark profile as completed
+
+            const updatedUser = await this.userRepository.save(user);
+            const { email, roles, id, name, profilePhoto, profilePhotoSource } = updatedUser;
+
+            return { email, roles, id, name, profilePhoto, profilePhotoSource };
+        } catch (error) {
+            console.error('Error completing user profile:', error);
+            throw error;
+        }
+    }
+
 }
 
 export { AuthService };
