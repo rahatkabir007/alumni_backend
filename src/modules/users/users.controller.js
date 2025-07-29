@@ -29,7 +29,8 @@ class UsersController {
         }));
 
         app.get('/users/verified', asyncHandler(async (req, res) => {
-            const result = await this.usersService.getUsers(req.query, { verified: true });
+            const query = { ...req.query, verified: true };
+            const result = await this.usersService.getUsers(query);
             return ResponseHandler.success(res, result, 'Users retrieved successfully');
         }));
 

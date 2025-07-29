@@ -22,7 +22,7 @@ class UsersService {
         }
     }
 
-    async getUsers(queryParams = {}, verified) {
+    async getUsers(queryParams = {}) {
         try {
             const {
                 page = 1,
@@ -37,6 +37,7 @@ class UsersService {
                 role = '',
                 excludeAdmins = false,
                 alumni_type = '',
+                verified = false,
             } = queryParams;
 
             // Validate pagination parameters
@@ -123,7 +124,7 @@ class UsersService {
                 queryBuilder.andWhere(`CAST(user.roles AS jsonb) @> :adminRole = false`, { adminRole: '["admin"]' });
             }
 
-            if (verified.verified === true) {
+            if (verified) {
                 queryBuilder.andWhere('user.status = :status', { status: 'active' });
             }
 
