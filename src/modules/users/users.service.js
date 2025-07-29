@@ -31,7 +31,6 @@ class UsersService {
                 sortOrder = 'DESC',
                 search = '',
                 provider = '',
-                isActive = '',
                 isGraduated = '',
                 graduation_year = '',
                 status = '',
@@ -48,7 +47,7 @@ class UsersService {
             // Validate sort parameters
             const allowedSortFields = [
                 'created_at', 'updated_at', 'name', 'email', 'phone', 'location',
-                'profession', 'graduation_year', 'batch', 'bio', 'isActive', 'roles',
+                'profession', 'graduation_year', 'batch', 'bio', 'roles',
                 'isGraduated', 'left_at', 'joinedYear', 'profilePhotoSource', 'alumni_type', 'status',
                 'blood_group', 'profilePhoto',
             ];
@@ -63,7 +62,7 @@ class UsersService {
             queryBuilder.select([
                 'user.id', 'user.email', 'user.name', 'user.phone', 'user.alumni_type', 'user.branch',
                 'user.status', 'user.blood_group', 'user.location', 'user.profession',
-                'user.graduation_year', 'user.batch', 'user.bio', 'user.isActive',
+                'user.graduation_year', 'user.batch', 'user.bio',
                 'user.isGraduated', 'user.left_at', 'user.joinedYear', 'user.profilePhoto',
                 'user.profilePhotoSource', 'user.roles', 'user.provider',
                 'user.created_at', 'user.updated_at'
@@ -82,13 +81,6 @@ class UsersService {
             if (provider && provider.trim()) {
                 queryBuilder.andWhere('user.provider ILIKE :provider', { provider: `%${provider.trim()}%` });
             }
-
-            // Apply isActive filter
-            if (isActive !== '') {
-                const activeValue = isActive === 'true';
-                queryBuilder.andWhere('user.isActive = :isActive', { isActive: activeValue });
-            }
-
             // Apply isGraduated filter
             if (isGraduated !== '') {
                 const graduatedValue = isGraduated === 'true';
@@ -175,7 +167,7 @@ class UsersService {
             const selectFields = [
                 'id', 'email', 'name', 'phone', 'location',
                 'profession', 'alumni_type', 'branch', 'blood_group', 'status',
-                'graduation_year', 'batch', 'bio', 'isActive',
+                'graduation_year', 'batch', 'bio',
                 'isGraduated', 'left_at', 'joinedYear', 'profilePhoto',
                 'profilePhotoSource', 'roles', 'provider',
                 'created_at', 'updated_at'

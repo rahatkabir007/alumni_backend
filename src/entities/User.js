@@ -58,12 +58,6 @@ export const User = new EntitySchema({
             nullable: true,
             comment: 'User biography/description'
         },
-        isActive: {
-            type: 'boolean',
-            default: true,
-            nullable: false,
-            comment: 'Admin controlled active status'
-        },
         status: {
             type: 'varchar',
             length: 50,

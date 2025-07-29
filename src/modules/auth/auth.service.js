@@ -144,7 +144,7 @@ class AuthService {
             const selectFields = [
                 'id', 'email', 'name', 'phone', 'location',
                 'profession', 'alumni_type', 'branch', 'blood_group', 'status',
-                'graduation_year', 'batch', 'bio', 'isActive',
+                'graduation_year', 'batch', 'bio',
                 'isGraduated', 'left_at', 'joinedYear', 'profilePhoto',
                 'profilePhotoSource', 'roles', 'provider', 'isProfileCompleted', 'isEmailVerified',
                 'created_at', 'updated_at'
@@ -236,6 +236,7 @@ class AuthService {
                     roles: ['user'],
                     profilePhoto: extractedPhoto || '',
                     profilePhotoSource: extractedPhoto ? provider : null,
+                    status: 'pending',
                     isProfileCompleted: false,
                     isEmailVerified: true,
                 };
@@ -288,7 +289,7 @@ class AuthService {
 
             // Update user profile data
             Object.assign(user, profileData);
-            user.isProfileCompleted = true; // Mark profile as completed
+            user.isProfileCompleted = true;
 
             const updatedUser = await this.userRepository.save(user);
             const { email, roles, id, name, profilePhoto, profilePhotoSource } = updatedUser;
