@@ -37,7 +37,7 @@ class AuthController {
         }));
 
         app.get('/auth/google',
-            passport.authenticate('google', { scope: ['profile', 'email'] })
+            passport.authenticate('google', { scope: ['profile', 'email', 'phone'] })
         );
 
         app.get('/auth/google/callback',
@@ -45,7 +45,6 @@ class AuthController {
             asyncHandler(async (req, res) => {
                 try {
                     const user = req.user;
-
                     if (!user) {
                         return res.redirect(`${process.env.FRONTEND_URL}/login?error=authentication_failed`);
                     }
@@ -53,7 +52,8 @@ class AuthController {
                     const token = generateToken({
                         email: user.email,
                         id: user.id,
-                        roles: user.roles || ['user'] // Include roles in JWT token
+                        roles: user.roles || ['user'], // Include roles in JWT token
+                        isProfileCompleted: user.isProfileCompleted || false,
                     });
 
                     console.log('Google login successful:', token);
@@ -63,7 +63,8 @@ class AuthController {
                         email: req.user.email,
                         name: req.user.name,
                         provider: req.user.provider,
-                        roles: req.user.roles || ['user']
+                        roles: req.user.roles || ['user'],
+                        isProfileCompleted: user.isProfileCompleted || false
                     }))}`);
 
                 } catch (error) {

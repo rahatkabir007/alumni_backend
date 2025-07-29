@@ -136,6 +136,18 @@ export const User = new EntitySchema({
             length: 50,
             default: 'email',
         },
+        isProfileCompleted: {
+            type: 'boolean',
+            default: false,
+            nullable: false,
+            comment: 'Whether user profile is fully completed'
+        },
+        isEmailVerified: {
+            type: 'boolean',
+            default: false,
+            nullable: false,
+            comment: 'Whether user email is verified'
+        },
         created_at: {
             type: 'timestamp',
             createDate: true,

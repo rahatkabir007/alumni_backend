@@ -6,11 +6,11 @@ const configurePassport = () => {
     const authService = new AuthService();
 
     // Debug: Check if environment variables are loaded
-    console.log('Passport Environment Debug:', {
-        hasGOOGLE_CLIENT_ID: !!process.env.GOOGLE_CLIENT_ID,
-        hasGOOGLE_CLIENT_SECRET: !!process.env.GOOGLE_CLIENT_SECRET,
-        GOOGLE_CLIENT_ID_VALUE: process.env.GOOGLE_CLIENT_ID
-    });
+    // console.log('Passport Environment Debug:', {
+    //     hasGOOGLE_CLIENT_ID: !!process.env.GOOGLE_CLIENT_ID,
+    //     hasGOOGLE_CLIENT_SECRET: !!process.env.GOOGLE_CLIENT_SECRET,
+    //     GOOGLE_CLIENT_ID_VALUE: process.env.GOOGLE_CLIENT_ID
+    // });
 
     // Google OAuth Strategy
     passport.use(new GoogleStrategy({

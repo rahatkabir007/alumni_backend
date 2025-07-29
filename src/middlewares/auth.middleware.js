@@ -4,6 +4,7 @@ import { tokenBlacklist } from '../utils/tokenBlacklist.js';
 const publicRoutes = [
     '/auth/register',
     '/auth/login',
+    '/auth/complete-profile',
     '/health',
     '/auth/google',
     '/auth/google/callback',
@@ -46,8 +47,14 @@ export const authMiddleware = (req, res, next) => {
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        console.log("🚀 ~ authMiddleware ~ decoded:", decoded)
         req.user = decoded;
         req.token = token; // Store token for potential blacklisting
+
+        if (!decoded.isProfileCompleted && req.path !== '/auth/complete-profile') {
+            throw new Error('Please complete your profile first');
+        }
+
         next();
     } catch (error) {
         console.error('JWT verification error:', error.message);

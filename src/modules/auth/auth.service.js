@@ -116,7 +116,8 @@ class AuthService {
             const token = generateToken({
                 email: user.email,
                 id: user.id,
-                roles: user.roles // Include roles in JWT token
+                roles: user.roles, // Include roles in JWT token
+                isProfileCompleted: user.isProfileCompleted || false,
             });
 
             return { user: userWithoutPassword, token };
@@ -145,7 +146,7 @@ class AuthService {
                 'profession', 'alumni_type', 'branch', 'blood_group', 'status',
                 'graduation_year', 'batch', 'bio', 'isActive',
                 'isGraduated', 'left_at', 'joinedYear', 'profilePhoto',
-                'profilePhotoSource', 'roles', 'provider',
+                'profilePhotoSource', 'roles', 'provider', 'isProfileCompleted', 'isEmailVerified',
                 'created_at', 'updated_at'
             ];
 
@@ -235,6 +236,8 @@ class AuthService {
                     roles: ['user'],
                     profilePhoto: extractedPhoto || '',
                     profilePhotoSource: extractedPhoto ? provider : null,
+                    isProfileCompleted: false,
+                    isEmailVerified: true,
                 };
 
                 if (provider === 'google') {
