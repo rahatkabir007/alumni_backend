@@ -86,6 +86,12 @@ export const User = new EntitySchema({
             nullable: true,
             comment: 'Year when user joined the school'
         },
+        branch: {
+            type: 'varchar',
+            length: 100,
+            nullable: true,
+            comment: 'User branch/department in school'
+        },
         profilePhoto: {
             type: 'varchar',
             length: 500,

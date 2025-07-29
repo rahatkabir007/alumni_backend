@@ -142,7 +142,7 @@ class AuthService {
 
             const selectFields = [
                 'id', 'email', 'name', 'phone', 'location',
-                'profession', 'alumni_type', 'blood_group', 'status',
+                'profession', 'alumni_type', 'branch', 'blood_group', 'status',
                 'graduation_year', 'batch', 'bio', 'isActive',
                 'isGraduated', 'left_at', 'joinedYear', 'profilePhoto',
                 'profilePhotoSource', 'roles', 'provider',

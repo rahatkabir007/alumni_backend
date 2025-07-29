@@ -61,7 +61,7 @@ class UsersService {
 
             // Select fields (exclude password)
             queryBuilder.select([
-                'user.id', 'user.email', 'user.name', 'user.phone', 'user.alumni_type',
+                'user.id', 'user.email', 'user.name', 'user.phone', 'user.alumni_type', 'user.branch',
                 'user.status', 'user.blood_group', 'user.location', 'user.profession',
                 'user.graduation_year', 'user.batch', 'user.bio', 'user.isActive',
                 'user.isGraduated', 'user.left_at', 'user.joinedYear', 'user.profilePhoto',
@@ -174,7 +174,7 @@ class UsersService {
 
             const selectFields = [
                 'id', 'email', 'name', 'phone', 'location',
-                'profession', 'alumni_type', 'blood_group', 'status',
+                'profession', 'alumni_type', 'branch', 'blood_group', 'status',
                 'graduation_year', 'batch', 'bio', 'isActive',
                 'isGraduated', 'left_at', 'joinedYear', 'profilePhoto',
                 'profilePhotoSource', 'roles', 'provider',
@@ -222,6 +222,7 @@ class UsersService {
                 validatedData.location = validateLocation(updateData.location);
             }
 
+
             if (updateData.profession !== undefined) {
                 validatedData.profession = validateProfession(updateData.profession);
             }
@@ -259,6 +260,14 @@ class UsersService {
                     validatedData.blood_group = updateData.blood_group;
                 } else {
                     throw new Error('Invalid blood group');
+                }
+            }
+
+            if (updateData.branch !== undefined) {
+                if (['Jamalkhan', 'Patiya'].includes(updateData.branch)) {
+                    validatedData.branch = updateData.branch;
+                } else {
+                    throw new Error('Invalid branch');
                 }
             }
 
