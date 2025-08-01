@@ -1,5 +1,6 @@
 import { getDataSource } from "../../config/database.js";
 import { User } from "../../entities/User.js";
+import { PasswordService } from "../../utils/passwordService.js";
 import {
     sanitizeName,
     validatePhone,
@@ -16,6 +17,7 @@ class UsersService {
         try {
             this.dataSource = getDataSource();
             this.userRepository = this.dataSource.getRepository(User);
+            this.passwordService = new PasswordService();
         } catch (error) {
             console.error('Error initializing UsersService:', error);
             throw error;
@@ -312,6 +314,44 @@ class UsersService {
             return userWithoutPassword;
         } catch (error) {
             console.error('Update user error:', error);
+            throw error;
+        }
+    }
+
+    async changePassword(id, data) {
+        try {
+            const userId = parseInt(id);
+            if (isNaN(userId)) {
+                throw new Error('Invalid user ID');
+            }
+            // Include password field in the query since it's excluded by default
+            const user = await this.userRepository.findOne({
+                where: { id: userId },
+                select: ['id', 'email', 'password', 'name'] // Explicitly include password
+            });
+            if (!user) {
+                throw new Error('User not found');
+            }
+            if (!data.oldPassword || !data.newPassword) {
+                throw new Error('Old and new passwords are required');
+            }
+            if (data.newPassword.length < 6 || data.newPassword.length > 50) {
+                throw new Error('New password must be between 6 and 50 characters');
+            }
+
+            // Check if old password is correct
+            const isMatch = await this.passwordService.comparePasswords(data.oldPassword, user.password);
+            if (!isMatch) {
+                throw new Error('Old password is incorrect');
+            }
+
+            // Hash new password and update user
+            user.password = await this.passwordService.hashPassword(data.newPassword);
+            await this.userRepository.save(user);
+
+            return { message: 'Password changed successfully' };
+        } catch (error) {
+            console.error('Change password error:', error);
             throw error;
         }
     }

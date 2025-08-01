@@ -52,6 +52,9 @@ class AuthService {
             }
 
             // Create new user with email/password
+            if (userData.password.length < 6) {
+                throw new Error('Password must be at least 6 characters long');
+            }
             const hashedPassword = await bcrypt.hash(userData.password, 10);
 
             const user = this.userRepository.create({

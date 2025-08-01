@@ -34,6 +34,46 @@ class UsersController {
             return ResponseHandler.success(res, result, 'Users retrieved successfully');
         }));
 
+        // Convenience endpoint for current user - MUST be before /users/:id
+        app.patch('/users/change-password', authMiddleware, asyncHandler(async (req, res) => {
+            const currentUser = req.user;
+            const { currentPassword, newPassword } = req.body;
+
+            // Support both currentPassword and oldPassword field names
+            const oldPass = currentPassword;
+
+            if (!oldPass || !newPassword) {
+                return ResponseHandler.error(res,
+                    new Error('Current password and new password are required'),
+                    'Current password and new password are required'
+                );
+            }
+
+            if (newPassword.length < 6) {
+                return ResponseHandler.error(res,
+                    new Error('New password must be at least 6 characters long'),
+                    'New password must be at least 6 characters long'
+                );
+            }
+
+            const result = await this.usersService.changePassword(currentUser.id, {
+                oldPassword: oldPass,
+                newPassword
+            });
+
+            return ResponseHandler.success(res, result, 'Password changed successfully');
+        }));
+
+        // Get current user's complete profile (for authenticated user) - MUST be before /users/:id
+        app.get('/users/me/profile', authMiddleware, asyncHandler(async (req, res) => {
+            const result = await this.usersService.getUserById(req.user.id, true);
+
+            if (!result) {
+                return ResponseHandler.notFound(res, 'User profile not found');
+            }
+
+            return ResponseHandler.success(res, result, 'User profile retrieved successfully');
+        }));
 
         // Get user by ID with optional profile details
         app.get('/users/:id', asyncHandler(async (req, res) => {
@@ -45,17 +85,6 @@ class UsersController {
             }
 
             return ResponseHandler.success(res, result, 'User retrieved successfully');
-        }));
-
-        // Get current user's complete profile (for authenticated user)
-        app.get('/users/me/profile', authMiddleware, asyncHandler(async (req, res) => {
-            const result = await this.usersService.getUserById(req.user.id, true);
-
-            if (!result) {
-                return ResponseHandler.notFound(res, 'User profile not found');
-            }
-
-            return ResponseHandler.success(res, result, 'User profile retrieved successfully');
         }));
 
         // Update basic user profile (works for all alumni types)
@@ -91,12 +120,6 @@ class UsersController {
 
             const result = await this.usersService.updateAdditionalInformation(req.params.id, req.body);
             return ResponseHandler.success(res, result, 'Additional information updated successfully');
-        }));
-
-        // Convenience endpoint for current user
-        app.patch('/users/me/additional-info', authMiddleware, asyncHandler(async (req, res) => {
-            const result = await this.usersService.updateAdditionalInformation(req.user.id, req.body);
-            return ResponseHandler.success(res, result, 'Your additional information updated successfully');
         }));
 
         // Update status - Only admin and moderator
