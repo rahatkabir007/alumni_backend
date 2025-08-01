@@ -3,6 +3,7 @@ import { getDataSource } from '../../config/database.js';
 import { User } from '../../entities/User.js';
 import { generateToken } from '../../utils/jwtSign.js';
 import { extractProfilePhoto, extractUserName, shouldUpdateProfilePhoto } from '../../helpers/oauth.helper.js';
+import { UserValidator } from '../../validations/userValidation.js';
 
 class AuthService {
     constructor() {
@@ -36,8 +37,8 @@ class AuthService {
 
                     // Update existing user with password and combined provider
                     existingUser.password = hashedPassword;
-                    existingUser.name = userData.name || existingUser.name; // Keep existing name if no new name provided
-                    existingUser.provider = `${existingUser.provider},email`; // Combine providers
+                    existingUser.name = userData.name || existingUser.name;
+                    existingUser.provider = `${existingUser.provider},email`;
 
                     const savedUser = await this.userRepository.save(existingUser);
                     const { email, roles, id, name } = savedUser;
@@ -51,20 +52,69 @@ class AuthService {
                 }
             }
 
-            // Create new user with email/password
-            if (userData.password.length < 6) {
+            // Validate password
+            if (!userData.password || userData.password.length < 6) {
                 throw new Error('Password must be at least 6 characters long');
             }
+
+            // Map frontend field names to backend field names
+            const mappedUserData = {
+                name: userData.name,
+                email: userData.email,
+                phone: userData.phone,
+                location: userData.location,
+                blood_group: userData.blood_group,
+                branch: userData.branch,
+                alumni_type: userData.alumni_type,
+                joinedYear: userData.joinedYear,
+                batch: userData.batch,
+                isGraduated: userData.isGraduated,
+                // Handle conditional fields based on graduation status
+                graduation_year: userData.isGraduated ? userData.graduationYear : null,
+                left_at: !userData.isGraduated ? userData.leftAt : null
+            };
+
+            // Validate all user data using UserValidator
+            const validatedData = UserValidator.validateUserUpdate(mappedUserData, {
+                required: {
+                    name: true,
+                    phone: true,
+                    location: true,
+                    blood_group: true,
+                    branch: true,
+                    joinedYear: true,
+                    isGraduated: true
+                }
+            });
+
+            // Additional validation for students
+            if (validatedData.alumni_type === 'student' && !validatedData.batch) {
+                throw new Error('Batch is required for students');
+            }
+
+            // Hash password
             const hashedPassword = await bcrypt.hash(userData.password, 10);
 
+            // Create new user
             const user = this.userRepository.create({
-                email: userData.email,
+                email: validatedData.email || userData.email,
                 password: hashedPassword,
-                name: userData.name,
-                alumni_type: userData.alumni_type || null,
+                name: validatedData.name,
+                phone: validatedData.phone,
+                location: validatedData.location,
+                blood_group: validatedData.blood_group,
+                branch: validatedData.branch,
+                alumni_type: validatedData.alumni_type,
+                joinedYear: validatedData.joinedYear,
+                batch: validatedData.batch,
+                isGraduated: validatedData.isGraduated,
+                graduation_year: validatedData.graduation_year,
+                left_at: validatedData.left_at,
                 status: "pending",
                 roles: ['user'],
-                provider: 'email'
+                provider: 'email',
+                isProfileCompleted: true,
+                isEmailVerified: false,
             });
 
             const savedUser = await this.userRepository.save(user);

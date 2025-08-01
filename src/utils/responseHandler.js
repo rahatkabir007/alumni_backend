@@ -1,3 +1,5 @@
+import { UserValidationError } from '../validations/userValidation.js';
+
 class ResponseHandler {
     static success(res, data = null, message = 'Operation successful', statusCode = 200) {
         return res.status(statusCode).json({
@@ -9,6 +11,17 @@ class ResponseHandler {
 
     static error(res, error, message = 'Operation failed', statusCode = 400) {
         const isDevelopment = process.env.NODE_ENV === 'development';
+
+        // Handle UserValidationError specifically
+        if (error instanceof UserValidationError) {
+            return res.status(400).json({
+                success: false,
+                error: `Validation failed for ${error.field}: ${error.message}`,
+                message: error.message,
+                field: error.field,
+                ...(isDevelopment && { stack: error.stack })
+            });
+        }
 
         return res.status(statusCode).json({
             success: false,

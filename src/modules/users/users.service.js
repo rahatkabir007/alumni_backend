@@ -1,15 +1,10 @@
 import { getDataSource } from "../../config/database.js";
 import { User } from "../../entities/User.js";
 import { PasswordService } from "../../utils/passwordService.js";
+import { UserValidator } from "../../validations/userValidation.js";
 import {
-    sanitizeName,
-    validatePhone,
-    validateLocation,
     validateProfession,
-    validateGraduationYear,
-    validateBatch,
     validateBio,
-    validateLeftAtYear
 } from "../../helpers/validation.helper.js";
 
 class UsersService {
@@ -202,68 +197,39 @@ class UsersService {
                 throw new Error('User not found');
             }
 
-            // Handle base user fields
-            const validatedData = {};
+            // Use the new validation utility for core user fields
+            const coreFieldsToValidate = {
+                name: updateData.name,
+                phone: updateData.phone,
+                branch: updateData.branch,
+                location: updateData.location,
+                blood_group: updateData.blood_group,
+                batch: updateData.batch,
+                isGraduated: updateData.isGraduated,
+                joinedYear: updateData.joinedYear,
+                graduation_year: updateData.graduation_year,
+                left_at: updateData.left_at
+            };
 
-            if (updateData.name !== undefined) {
-                validatedData.name = sanitizeName(updateData.name);
-            }
+            // Remove undefined values
+            Object.keys(coreFieldsToValidate).forEach(key => {
+                if (coreFieldsToValidate[key] === undefined) {
+                    delete coreFieldsToValidate[key];
+                }
+            });
 
-            if (updateData.phone !== undefined) {
-                validatedData.phone = validatePhone(updateData.phone);
-            }
+            // Validate core fields
+            const validatedCoreData = UserValidator.validateUserUpdate(coreFieldsToValidate);
 
-            if (updateData.location !== undefined) {
-                validatedData.location = validateLocation(updateData.location);
-            }
-
+            // Handle other fields with existing validation
+            const validatedData = { ...validatedCoreData };
 
             if (updateData.profession !== undefined) {
                 validatedData.profession = validateProfession(updateData.profession);
             }
 
-            if (updateData.graduation_year !== undefined) {
-                validatedData.graduation_year = validateGraduationYear(updateData.graduation_year);
-            }
-
-            if (updateData.batch !== undefined) {
-                validatedData.batch = validateBatch(updateData.batch);
-            }
-
             if (updateData.bio !== undefined) {
                 validatedData.bio = validateBio(updateData.bio);
-            }
-
-            if (updateData.isGraduated !== undefined) {
-                validatedData.isGraduated = updateData.isGraduated === true || updateData.isGraduated === 'true';
-            }
-
-            if (updateData.left_at !== undefined) {
-                validatedData.left_at = validateLeftAtYear(updateData.left_at);
-            }
-            if (updateData.joinedYear !== undefined) {
-                const joinedYear = parseInt(updateData.joinedYear);
-                if (!isNaN(joinedYear) && joinedYear >= 1998 && joinedYear <= new Date().getFullYear() + 10) {
-                    validatedData.joinedYear = joinedYear;
-                } else {
-                    throw new Error('Invalid joined year');
-                }
-            }
-
-            if (updateData.blood_group !== undefined) {
-                if (['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].includes(updateData.blood_group) || updateData.blood_group === "") {
-                    validatedData.blood_group = updateData.blood_group;
-                } else {
-                    throw new Error('Invalid blood group');
-                }
-            }
-
-            if (updateData.branch !== undefined) {
-                if (['Jamalkhan', 'Patiya'].includes(updateData.branch)) {
-                    validatedData.branch = updateData.branch;
-                } else {
-                    throw new Error('Invalid branch');
-                }
             }
 
             if (updateData.alumni_type !== undefined) {
