@@ -62,7 +62,7 @@ export const User = new EntitySchema({
             type: 'varchar',
             length: 50,
             nullable: true,
-            comment: 'User status (e.g., active, inactive, pending)'
+            comment: 'User status (e.g., active, inactive, pending, rejected)'
         },
         isGraduated: {
             type: 'boolean',
@@ -114,6 +114,11 @@ export const User = new EntitySchema({
             type: 'json',
             nullable: true,
             comment: 'Alumni type specific data (education, experience, achievements, etc.)'
+        },
+        verification_fields: {
+            type: 'json',
+            nullable: true,
+            comment: 'Verification data including images and social media links'
         },
         roles: {
             type: 'json',

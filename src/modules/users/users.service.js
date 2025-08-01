@@ -172,7 +172,7 @@ class UsersService {
             ];
 
             if (includeDetails) {
-                selectFields.push('additional_information');
+                selectFields.push('additional_information', 'verification_fields');
             }
 
             return await this.userRepository.findOne({
@@ -499,26 +499,18 @@ class UsersService {
         }
 
         const validated = {};
-        const allowedPlatforms = ['linkedin', 'twitter', 'facebook', 'instagram'];
+        const allowedPlatforms = ['linkedin', 'twitter', 'facebook', 'instagram', 'github', 'website'];
 
         for (const [platform, url] of Object.entries(socialMedia)) {
-            if (allowedPlatforms.includes(platform) && url && typeof url === 'string') {
-                if (url.length <= 500 && this.isValidUrl(url)) {
-                    validated[platform] = url;
+            if (allowedPlatforms.includes(platform.toLowerCase()) && url && typeof url === 'string') {
+                const trimmedUrl = url.trim();
+                if (trimmedUrl.length <= 500 && this.isValidUrl(trimmedUrl)) {
+                    validated[platform.toLowerCase()] = trimmedUrl;
                 }
             }
         }
 
         return validated;
-    }
-
-    isValidUrl(string) {
-        try {
-            const url = new URL(string);
-            return url.protocol === 'http:' || url.protocol === 'https:';
-        } catch (_) {
-            return false;
-        }
     }
 
     async updateStatus(id, status) {
@@ -631,6 +623,99 @@ class UsersService {
         } catch (error) {
             console.error('Delete user error:', error);
             throw error;
+        }
+    }
+
+    async applyForVerification(id, verificationData = {}) {
+        try {
+            const userId = parseInt(id);
+            if (isNaN(userId)) {
+                throw new Error('Invalid user ID');
+            }
+
+            const user = await this.userRepository.findOne({ where: { id: userId } });
+            if (!user) {
+                throw new Error('User not found');
+            }
+
+            // Validate and process verification data
+            const validatedVerificationData = this.validateVerificationData(verificationData);
+
+            // If social media is provided in verification, also add it to additional_information
+            if (validatedVerificationData.socialMedia && Object.keys(validatedVerificationData.socialMedia).length > 0) {
+                const existingAdditionalInfo = user.additional_information || {};
+                const existingSocialMedia = existingAdditionalInfo.socialMedia || {};
+
+                // Merge social media data
+                const mergedSocialMedia = { ...existingSocialMedia, ...validatedVerificationData.socialMedia };
+
+                user.additional_information = {
+                    ...existingAdditionalInfo,
+                    socialMedia: mergedSocialMedia
+                };
+            }
+
+            // Store verification data
+            user.verification_fields = validatedVerificationData;
+
+            // Update status to pending verification if not already verified
+            if (user.status !== 'active') {
+                user.status = 'pending_verification';
+            }
+
+            const updatedUser = await this.userRepository.save(user);
+            const { password, ...userWithoutPassword } = updatedUser;
+            return userWithoutPassword;
+        } catch (error) {
+            console.error('Apply for verification error:', error);
+            throw error;
+        }
+    }
+
+    validateVerificationData(verificationData) {
+        if (!verificationData || typeof verificationData !== 'object') {
+            throw new Error('Verification data is required');
+        }
+
+        const validated = {};
+
+        // Validate verification images - REQUIRED
+        if (!verificationData.verification_images || !Array.isArray(verificationData.verification_images)) {
+            throw new Error('Verification images are required');
+        }
+
+        const validImages = verificationData.verification_images
+            .filter(url => url && typeof url === 'string' && this.isValidUrl(url))
+            .map(url => url.trim())
+            .slice(0, 10); // Limit to 10 images
+
+        if (validImages.length === 0) {
+            throw new Error('At least one valid verification image URL is required');
+        }
+
+        validated.verification_images = validImages;
+
+        // Validate social media links - OPTIONAL
+        if (verificationData.socialMedia && typeof verificationData.socialMedia === 'object') {
+            const validatedSocialMedia = this.validateSocialMedia(verificationData.socialMedia);
+            if (Object.keys(validatedSocialMedia).length > 0) {
+                validated.socialMedia = validatedSocialMedia;
+            }
+        }
+
+        // Add timestamp for verification request
+        validated.submitted_at = new Date().toISOString();
+        validated.status = 'pending';
+
+        return validated;
+    }
+
+    isValidUrl(string) {
+        try {
+            const url = new URL(string);
+            return url.protocol === 'http:' || url.protocol === 'https:';
+        } catch (_) {
+            return false;
         }
     }
 }

@@ -185,6 +185,22 @@ class UsersController {
 
             return ResponseHandler.success(res, null, 'User deleted successfully');
         }));
+
+        app.patch('/users/:id/apply_for_verification', authMiddleware, asyncHandler(async (req, res) => {
+            const targetUserId = parseInt(req.params.id);
+            const currentUser = req.user;
+            const verificationData = req.body.verification_fields || req.body;
+
+            if (currentUser.id !== targetUserId) {
+                return ResponseHandler.forbidden(res, 'You can only apply for verification on your own profile');
+            }
+
+            const result = await this.usersService.applyForVerification(targetUserId, verificationData);
+            if (!result) {
+                return ResponseHandler.notFound(res, 'User not found');
+            }
+            return ResponseHandler.success(res, result, 'Verification application submitted successfully');
+        }));
     }
 }
 
