@@ -660,7 +660,7 @@ class UsersService {
 
             // Update status to pending verification if not already verified
             if (user.status !== 'active') {
-                user.status = 'pending_verification';
+                user.status = 'applied_for_verification';
             }
 
             const updatedUser = await this.userRepository.save(user);
