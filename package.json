@@ -15,7 +15,8 @@
     "test:prod-local": "node test-prod-local.js",
     "debug:env": "node -e \"console.log(process.env)\"",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "seed": "node src/scripts/migrate.js seed"
   },
   "notes": {
     "session-usage": "Sessions are only used for OAuth flow completion. Main authentication uses JWT tokens.",

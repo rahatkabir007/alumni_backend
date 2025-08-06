@@ -2,6 +2,12 @@ import 'reflect-metadata';
 import { DataSource } from 'typeorm';
 import { Client } from 'pg';
 import { loadEntities } from '../utils/entityLoader.js';
+import { SeederRunner } from '../utils/seederRunner.js';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Environment variables are loaded in main.js
 
@@ -76,7 +82,7 @@ const connectDB = async () => {
             connectionConfig = {
                 type: 'postgres',
                 url: dbUrl,
-                entities: entities, // Dynamic entities
+                entities: [join(__dirname, '../entities/*{.js,.ts}')],
                 synchronize: true, // Enable to create tables in production (first time)
                 logging: false,
                 ssl: { rejectUnauthorized: false },
@@ -95,7 +101,7 @@ const connectDB = async () => {
                 username: process.env.DB_USER,
                 password: process.env.DB_PASSWORD,
                 database: process.env.DB_NAME,
-                entities: entities, // Dynamic entities
+                entities: [join(__dirname, '../entities/*{.js,.ts}')], // Dynamic entities
                 synchronize: true, // Auto-sync in development
                 logging: false,
                 ssl: false
@@ -109,10 +115,32 @@ const connectDB = async () => {
         }
 
         console.log(`Connected to PostgreSQL (${process.env.NODE_ENV})`);
+
+        // Auto-run seeders on first startup (when tables are empty)
+        await runSeedersIfNeeded(dataSource);
+
         return dataSource;
     } catch (error) {
         console.error('Could not connect to PostgreSQL', error);
         throw error;
+    }
+};
+
+const runSeedersIfNeeded = async (dataSource) => {
+    try {
+        // Check if this is the first startup (no users exist)
+        const userRepository = dataSource.getRepository('User');
+        const userCount = await userRepository.count();
+
+        if (userCount === 0) {
+            console.log('🌱 First startup detected - running seeders automatically...');
+            const seederRunner = new SeederRunner(dataSource);
+            await seederRunner.runSeeders();
+            console.log('✅ Automatic seeding completed!');
+        }
+    } catch (error) {
+        console.warn('⚠️ Could not run automatic seeders:', error.message);
+        // Don't throw error - let the app continue even if seeding fails
     }
 };
 
