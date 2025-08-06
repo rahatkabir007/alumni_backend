@@ -205,6 +205,7 @@ class AuthService {
 
             if (includeDetails) {
                 selectFields.push('additional_information');
+                selectFields.push('verification_fields')
             }
 
             return await this.userRepository.findOne({
