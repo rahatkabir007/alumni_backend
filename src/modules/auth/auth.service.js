@@ -336,6 +336,7 @@ class AuthService {
             const user = await this.userRepository.findOne({
                 where: { id: userId }
             });
+            console.log("🚀 ~ AuthService ~ completeUserProfile ~ user:", user)
 
             if (!user) {
                 throw new Error('User not found');
