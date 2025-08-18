@@ -350,6 +350,166 @@ class UsersService {
         }
     }
 
+    async updateStatus(id, status) {
+        try {
+            const userId = parseInt(id);
+            if (isNaN(userId)) {
+                throw new Error('Invalid user ID');
+            }
+
+            const user = await this.userRepository.findOne({ where: { id: userId } });
+
+            if (!user) {
+                throw new Error('User not found');
+            }
+
+            // Validate status
+            if (typeof status !== 'string' || status.length > 50) {
+                throw new Error('Invalid status');
+            }
+
+            user.status = status;
+            const updatedUser = await this.userRepository.save(user);
+
+            const { password, ...userWithoutPassword } = updatedUser;
+            return userWithoutPassword;
+        } catch (error) {
+            console.error('Update user status error:', error);
+            throw error;
+        }
+    }
+
+    async updateRole(id, role) {
+        try {
+            const userId = parseInt(id);
+            if (isNaN(userId)) {
+                throw new Error('Invalid user ID');
+            }
+
+            const user = await this.userRepository.findOne({ where: { id: userId } });
+
+            if (!user) {
+                throw new Error('User not found');
+            }
+
+            // Validate role
+            if (typeof role !== 'string' || role.length > 50) {
+                throw new Error('Invalid role');
+            }
+
+            // Ensure roles is an array
+            if (!Array.isArray(user.roles)) {
+                user.roles = [];
+            }
+
+            // Add the new role if it doesn't already exist
+            if (!user.roles.includes(role)) {
+                user.roles.push(role);
+            }
+
+            const updatedUser = await this.userRepository.save(user);
+
+            const { password, ...userWithoutPassword } = updatedUser;
+            return userWithoutPassword;
+        } catch (error) {
+            console.error('Update user role error:', error);
+            throw error;
+        }
+    }
+
+    async removeRole(id, role) {
+        try {
+            const userId = parseInt(id);
+            if (isNaN(userId)) {
+                throw new Error('Invalid user ID');
+            }
+
+            const user = await this.userRepository.findOne({ where: { id: userId } });
+
+            if (!user) {
+                throw new Error('User not found');
+            }
+
+            // Validate role
+            if (typeof role !== 'string' || role.length > 50) {
+                throw new Error('Invalid role');
+            }
+
+            // Remove the role if it exists
+            user.roles = user.roles.filter(r => r !== role);
+
+            const updatedUser = await this.userRepository.save(user);
+
+            const { password, ...userWithoutPassword } = updatedUser;
+            return userWithoutPassword;
+        } catch (error) {
+            console.error('Remove user role error:', error);
+            throw error;
+        }
+    }
+
+    async deleteUser(id) {
+        try {
+            const userId = parseInt(id);
+            if (isNaN(userId)) {
+                throw new Error('Invalid user ID');
+            }
+
+            const result = await this.userRepository.delete(userId);
+            return result.affected > 0;
+        } catch (error) {
+            console.error('Delete user error:', error);
+            throw error;
+        }
+    }
+
+    async applyForVerification(id, verificationData = {}) {
+        try {
+            const userId = parseInt(id);
+            if (isNaN(userId)) {
+                throw new Error('Invalid user ID');
+            }
+
+            const user = await this.userRepository.findOne({ where: { id: userId } });
+            if (!user) {
+                throw new Error('User not found');
+            }
+
+            // Validate and process verification data
+            const validatedVerificationData = this.validateVerificationData(verificationData);
+
+            // If social media is provided in verification, also add it to additional_information
+            if (validatedVerificationData.socialMedia && Object.keys(validatedVerificationData.socialMedia).length > 0) {
+                const existingAdditionalInfo = user.additional_information || {};
+                const existingSocialMedia = existingAdditionalInfo.socialMedia || {};
+
+                // Merge social media data
+                const mergedSocialMedia = { ...existingSocialMedia, ...validatedVerificationData.socialMedia };
+
+                user.additional_information = {
+                    ...existingAdditionalInfo,
+                    socialMedia: mergedSocialMedia
+                };
+            }
+
+            // Store verification data
+            user.verification_fields = validatedVerificationData;
+
+            // Update status to pending verification if not already verified
+            if (user.status !== 'active') {
+                user.status = 'applied_for_verification';
+            }
+
+            const updatedUser = await this.userRepository.save(user);
+            const { password, ...userWithoutPassword } = updatedUser;
+            return userWithoutPassword;
+        } catch (error) {
+            console.error('Apply for verification error:', error);
+            throw error;
+        }
+    }
+
+
     validateAdditionalInformation(additionalInfo, alumniType) {
         if (!additionalInfo || typeof additionalInfo !== 'object') {
             return {};
@@ -511,165 +671,6 @@ class UsersService {
         }
 
         return validated;
-    }
-
-    async updateStatus(id, status) {
-        try {
-            const userId = parseInt(id);
-            if (isNaN(userId)) {
-                throw new Error('Invalid user ID');
-            }
-
-            const user = await this.userRepository.findOne({ where: { id: userId } });
-
-            if (!user) {
-                throw new Error('User not found');
-            }
-
-            // Validate status
-            if (typeof status !== 'string' || status.length > 50) {
-                throw new Error('Invalid status');
-            }
-
-            user.status = status;
-            const updatedUser = await this.userRepository.save(user);
-
-            const { password, ...userWithoutPassword } = updatedUser;
-            return userWithoutPassword;
-        } catch (error) {
-            console.error('Update user status error:', error);
-            throw error;
-        }
-    }
-
-    async updateRole(id, role) {
-        try {
-            const userId = parseInt(id);
-            if (isNaN(userId)) {
-                throw new Error('Invalid user ID');
-            }
-
-            const user = await this.userRepository.findOne({ where: { id: userId } });
-
-            if (!user) {
-                throw new Error('User not found');
-            }
-
-            // Validate role
-            if (typeof role !== 'string' || role.length > 50) {
-                throw new Error('Invalid role');
-            }
-
-            // Ensure roles is an array
-            if (!Array.isArray(user.roles)) {
-                user.roles = [];
-            }
-
-            // Add the new role if it doesn't already exist
-            if (!user.roles.includes(role)) {
-                user.roles.push(role);
-            }
-
-            const updatedUser = await this.userRepository.save(user);
-
-            const { password, ...userWithoutPassword } = updatedUser;
-            return userWithoutPassword;
-        } catch (error) {
-            console.error('Update user role error:', error);
-            throw error;
-        }
-    }
-
-    async removeRole(id, role) {
-        try {
-            const userId = parseInt(id);
-            if (isNaN(userId)) {
-                throw new Error('Invalid user ID');
-            }
-
-            const user = await this.userRepository.findOne({ where: { id: userId } });
-
-            if (!user) {
-                throw new Error('User not found');
-            }
-
-            // Validate role
-            if (typeof role !== 'string' || role.length > 50) {
-                throw new Error('Invalid role');
-            }
-
-            // Remove the role if it exists
-            user.roles = user.roles.filter(r => r !== role);
-
-            const updatedUser = await this.userRepository.save(user);
-
-            const { password, ...userWithoutPassword } = updatedUser;
-            return userWithoutPassword;
-        } catch (error) {
-            console.error('Remove user role error:', error);
-            throw error;
-        }
-    }
-
-    async deleteUser(id) {
-        try {
-            const userId = parseInt(id);
-            if (isNaN(userId)) {
-                throw new Error('Invalid user ID');
-            }
-
-            const result = await this.userRepository.delete(userId);
-            return result.affected > 0;
-        } catch (error) {
-            console.error('Delete user error:', error);
-            throw error;
-        }
-    }
-
-    async applyForVerification(id, verificationData = {}) {
-        try {
-            const userId = parseInt(id);
-            if (isNaN(userId)) {
-                throw new Error('Invalid user ID');
-            }
-
-            const user = await this.userRepository.findOne({ where: { id: userId } });
-            if (!user) {
-                throw new Error('User not found');
-            }
-
-            // Validate and process verification data
-            const validatedVerificationData = this.validateVerificationData(verificationData);
-
-            // If social media is provided in verification, also add it to additional_information
-            if (validatedVerificationData.socialMedia && Object.keys(validatedVerificationData.socialMedia).length > 0) {
-                const existingAdditionalInfo = user.additional_information || {};
-                const existingSocialMedia = existingAdditionalInfo.socialMedia || {};
-
-                // Merge social media data
-                const mergedSocialMedia = { ...existingSocialMedia, ...validatedVerificationData.socialMedia };
-
-                user.additional_information = {
-                    ...existingAdditionalInfo,
-                    socialMedia: mergedSocialMedia
-                };
-            }
-
-            // Store verification data
-            user.verification_fields = validatedVerificationData;
-
-            // Update status to pending verification if not already verified
-            if (user.status !== 'active') {
-                user.status = 'applied_for_verification';
-            }
-
-            const updatedUser = await this.userRepository.save(user);
-            const { password, ...userWithoutPassword } = updatedUser;
-            return userWithoutPassword;
-        } catch (error) {
-            console.error('Apply for verification error:', error);
-            throw error;
-        }
     }
 
     validateVerificationData(verificationData) {
