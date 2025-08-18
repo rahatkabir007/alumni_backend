@@ -26,7 +26,7 @@ class ResponseHandler {
         return res.status(statusCode).json({
             success: false,
             error: message,
-            message: isDevelopment ? error.message : message,
+            message: error.message || message,
             ...(isDevelopment && { stack: error.stack })
         });
     }
