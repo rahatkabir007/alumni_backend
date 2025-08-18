@@ -2,10 +2,6 @@ import { getDataSource } from "../../config/database.js";
 import { User } from "../../entities/User.js";
 import { PasswordService } from "../../utils/passwordService.js";
 import { UserValidator } from "../../validations/userValidation.js";
-import {
-    validateProfession,
-    validateBio,
-} from "../../helpers/validation.helper.js";
 
 class UsersService {
     constructor() {
@@ -197,8 +193,8 @@ class UsersService {
                 throw new Error('User not found');
             }
 
-            // Use the new validation utility for core user fields
-            const coreFieldsToValidate = {
+            // Use centralized validation for all fields
+            const fieldsToValidate = {
                 name: updateData.name,
                 phone: updateData.phone,
                 branch: updateData.branch,
@@ -208,53 +204,23 @@ class UsersService {
                 isGraduated: updateData.isGraduated,
                 joinedYear: updateData.joinedYear,
                 graduation_year: updateData.graduation_year,
-                left_at: updateData.left_at
+                left_at: updateData.left_at,
+                profession: updateData.profession,
+                bio: updateData.bio,
+                alumni_type: updateData.alumni_type,
+                profilePhotoSource: updateData.profilePhotoSource,
+                profilePhoto: updateData.profilePhoto
             };
 
             // Remove undefined values
-            Object.keys(coreFieldsToValidate).forEach(key => {
-                if (coreFieldsToValidate[key] === undefined) {
-                    delete coreFieldsToValidate[key];
+            Object.keys(fieldsToValidate).forEach(key => {
+                if (fieldsToValidate[key] === undefined) {
+                    delete fieldsToValidate[key];
                 }
             });
 
-            // Validate core fields
-            const validatedCoreData = UserValidator.validateUserUpdate(coreFieldsToValidate);
-
-            // Handle other fields with existing validation
-            const validatedData = { ...validatedCoreData };
-
-            if (updateData.profession !== undefined) {
-                validatedData.profession = validateProfession(updateData.profession);
-            }
-
-            if (updateData.bio !== undefined) {
-                validatedData.bio = validateBio(updateData.bio);
-            }
-
-            if (updateData.alumni_type !== undefined) {
-                if (['student', 'teacher', 'management'].includes(updateData.alumni_type)) {
-                    validatedData.alumni_type = updateData.alumni_type;
-                } else {
-                    throw new Error('Invalid alumni type');
-                }
-            }
-
-            if (updateData.profilePhotoSource !== undefined) {
-                if (['google', 'manual'].includes(updateData.profilePhotoSource)) {
-                    validatedData.profilePhotoSource = updateData.profilePhotoSource;
-                } else {
-                    throw new Error('Invalid profile photo source');
-                }
-            }
-
-            if (updateData.profilePhoto !== undefined) {
-                if (typeof updateData.profilePhoto === 'string' && updateData.profilePhoto.length <= 500) {
-                    validatedData.profilePhoto = updateData.profilePhoto;
-                } else {
-                    throw new Error('Invalid profile photo URL');
-                }
-            }
+            // Validate all fields using centralized validation
+            const validatedData = UserValidator.validateUserUpdate(fieldsToValidate);
 
             // Handle additional_information field
             if (updateData.additional_information !== undefined) {
@@ -266,7 +232,7 @@ class UsersService {
                         throw new Error('Invalid JSON for additional_information');
                     }
                 }
-                validatedData.additional_information = this.validateAdditionalInformation(
+                validatedData.additional_information = UserValidator.validateAdditionalInformation(
                     additionalInfo,
                     user.alumni_type
                 );
@@ -334,8 +300,8 @@ class UsersService {
                 throw new Error('User not found');
             }
 
-            // Validate and merge additional information
-            const validatedInfo = this.validateAdditionalInformation(additionalInfo, user.alumni_type);
+            // Use centralized validation
+            const validatedInfo = UserValidator.validateAdditionalInformation(additionalInfo, user.alumni_type);
 
             // Merge with existing additional_information
             const existingInfo = user.additional_information || {};
@@ -475,8 +441,8 @@ class UsersService {
                 throw new Error('User not found');
             }
 
-            // Validate and process verification data
-            const validatedVerificationData = this.validateVerificationData(verificationData);
+            // Use centralized validation
+            const validatedVerificationData = UserValidator.validateVerificationData(verificationData);
 
             // If social media is provided in verification, also add it to additional_information
             if (validatedVerificationData.socialMedia && Object.keys(validatedVerificationData.socialMedia).length > 0) {
@@ -506,217 +472,6 @@ class UsersService {
         } catch (error) {
             console.error('Apply for verification error:', error);
             throw error;
-        }
-    }
-
-
-    validateAdditionalInformation(additionalInfo, alumniType) {
-        if (!additionalInfo || typeof additionalInfo !== 'object') {
-            return {};
-        }
-
-        const validated = {};
-
-        // Common fields for all alumni types
-        if (additionalInfo.achievements && Array.isArray(additionalInfo.achievements)) {
-            validated.achievements = additionalInfo.achievements
-                .filter(achievement => typeof achievement === 'string' && achievement.trim().length > 0)
-                .map(achievement => achievement.trim())
-                .slice(0, 50); // Limit to 50 achievements
-        }
-
-        if (additionalInfo.education && Array.isArray(additionalInfo.education)) {
-            validated.education = additionalInfo.education
-                .filter(edu => edu && typeof edu === 'object')
-                .map(edu => ({
-                    degree: edu.degree ? String(edu.degree).trim().substring(0, 200) : '',
-                    institution: edu.institution ? String(edu.institution).trim().substring(0, 200) : '',
-                    year: this.validateYear(edu.year),
-                    grade: edu.grade ? String(edu.grade).trim().substring(0, 50) : ''
-                }))
-                .slice(0, 20); // Limit to 20 education records
-        }
-
-        if (additionalInfo.experience && Array.isArray(additionalInfo.experience)) {
-            validated.experience = additionalInfo.experience
-                .filter(exp => exp && typeof exp === 'object')
-                .map(exp => ({
-                    position: exp.position ? String(exp.position).trim().substring(0, 200) : '',
-                    organization: exp.organization ? String(exp.organization).trim().substring(0, 200) : '',
-                    institution: exp.institution ? String(exp.institution).trim().substring(0, 200) : '',
-                    period: exp.period ? String(exp.period).trim().substring(0, 100) : '',
-                    description: exp.description ? String(exp.description).trim().substring(0, 1000) : ''
-                }))
-                .slice(0, 20); // Limit to 20 experience records
-        }
-
-        // Student-specific fields
-        if (alumniType === 'student') {
-            if (additionalInfo.class) {
-                validated.class = String(additionalInfo.class).trim().substring(0, 10);
-            }
-
-            if (additionalInfo.currentPosition) {
-                validated.currentPosition = String(additionalInfo.currentPosition).trim().substring(0, 200);
-            }
-
-            if (additionalInfo.organization) {
-                validated.organization = String(additionalInfo.organization).trim().substring(0, 200);
-            }
-
-            if (additionalInfo.joinedYear) {
-                validated.joinedYear = this.validateYear(additionalInfo.joinedYear);
-            }
-
-            if (additionalInfo.graduatedYear) {
-                validated.graduatedYear = this.validateYear(additionalInfo.graduatedYear);
-            }
-
-            if (additionalInfo.quotes) {
-                validated.quotes = String(additionalInfo.quotes).trim().substring(0, 2000);
-            }
-
-            if (additionalInfo.socialMedia && typeof additionalInfo.socialMedia === 'object') {
-                validated.socialMedia = this.validateSocialMedia(additionalInfo.socialMedia);
-            }
-
-            if (additionalInfo.socialContributions && Array.isArray(additionalInfo.socialContributions)) {
-                validated.socialContributions = additionalInfo.socialContributions
-                    .filter(contrib => typeof contrib === 'string' && contrib.trim().length > 0)
-                    .map(contrib => contrib.trim().substring(0, 500))
-                    .slice(0, 20);
-            }
-        }
-
-        // Teacher/Management-specific fields
-        if (alumniType === 'teacher' || alumniType === 'management') {
-            if (additionalInfo.designation) {
-                validated.designation = String(additionalInfo.designation).trim().substring(0, 100);
-            }
-
-            if (additionalInfo.department) {
-                validated.department = String(additionalInfo.department).trim().substring(0, 100);
-            }
-
-            if (additionalInfo.period) {
-                validated.period = String(additionalInfo.period).trim().substring(0, 50);
-            }
-
-            if (additionalInfo.subject) {
-                validated.subject = String(additionalInfo.subject).trim().substring(0, 100);
-            }
-
-            if (additionalInfo.specialization) {
-                validated.specialization = String(additionalInfo.specialization).trim().substring(0, 200);
-            }
-
-            if (additionalInfo.quote) {
-                validated.quote = String(additionalInfo.quote).trim().substring(0, 2000);
-            }
-
-            if (additionalInfo.officeHours) {
-                validated.officeHours = String(additionalInfo.officeHours).trim().substring(0, 100);
-            }
-
-            if (additionalInfo.publications && Array.isArray(additionalInfo.publications)) {
-                validated.publications = additionalInfo.publications
-                    .filter(pub => pub && typeof pub === 'object')
-                    .map(pub => ({
-                        title: pub.title ? String(pub.title).trim().substring(0, 300) : '',
-                        year: this.validateYear(pub.year),
-                        publisher: pub.publisher ? String(pub.publisher).trim().substring(0, 200) : ''
-                    }))
-                    .slice(0, 50);
-            }
-
-            if (additionalInfo.studentsFeedback && Array.isArray(additionalInfo.studentsFeedback)) {
-                validated.studentsFeedback = additionalInfo.studentsFeedback
-                    .filter(feedback => feedback && typeof feedback === 'object')
-                    .map(feedback => ({
-                        name: feedback.name ? String(feedback.name).trim().substring(0, 100) : '',
-                        batch: feedback.batch ? String(feedback.batch).trim().substring(0, 50) : '',
-                        feedback: feedback.feedback ? String(feedback.feedback).trim().substring(0, 1000) : ''
-                    }))
-                    .slice(0, 100);
-            }
-        }
-
-        return validated;
-    }
-
-    validateYear(year) {
-        if (!year) return null;
-        const numYear = parseInt(year);
-        if (isNaN(numYear) || numYear < 1950 || numYear > new Date().getFullYear() + 10) {
-            return null;
-        }
-        return numYear;
-    }
-
-    validateSocialMedia(socialMedia) {
-        if (!socialMedia || typeof socialMedia !== 'object') {
-            return {};
-        }
-
-        const validated = {};
-        const allowedPlatforms = ['linkedin', 'twitter', 'facebook', 'instagram', 'github', 'website'];
-
-        for (const [platform, url] of Object.entries(socialMedia)) {
-            if (allowedPlatforms.includes(platform.toLowerCase()) && url && typeof url === 'string') {
-                const trimmedUrl = url.trim();
-                if (trimmedUrl.length <= 500 && this.isValidUrl(trimmedUrl)) {
-                    validated[platform.toLowerCase()] = trimmedUrl;
-                }
-            }
-        }
-
-        return validated;
-    }
-
-    validateVerificationData(verificationData) {
-        if (!verificationData || typeof verificationData !== 'object') {
-            throw new Error('Verification data is required');
-        }
-
-        const validated = {};
-
-        // Validate verification images - REQUIRED
-        if (!verificationData.verification_images || !Array.isArray(verificationData.verification_images)) {
-            throw new Error('Verification images are required');
-        }
-
-        const validImages = verificationData.verification_images
-            .filter(url => url && typeof url === 'string' && this.isValidUrl(url))
-            .map(url => url.trim())
-            .slice(0, 10); // Limit to 10 images
-
-        if (validImages.length === 0) {
-            throw new Error('At least one valid verification image URL is required');
-        }
-
-        validated.verification_images = validImages;
-
-        // Validate social media links - OPTIONAL
-        if (verificationData.socialMedia && typeof verificationData.socialMedia === 'object') {
-            const validatedSocialMedia = this.validateSocialMedia(verificationData.socialMedia);
-            if (Object.keys(validatedSocialMedia).length > 0) {
-                validated.socialMedia = validatedSocialMedia;
-            }
-        }
-
-        // Add timestamp for verification request
-        validated.submitted_at = new Date().toISOString();
-        validated.status = 'pending';
-
-        return validated;
-    }
-
-    isValidUrl(string) {
-        try {
-            const url = new URL(string);
-            return url.protocol === 'http:' || url.protocol === 'https:';
-        } catch (_) {
-            return false;
         }
     }
 }
