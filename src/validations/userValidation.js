@@ -498,6 +498,9 @@ export class UserValidator {
                     }))
                     .slice(0, 100);
             }
+            if (additionalInfo.socialMedia && typeof additionalInfo.socialMedia === 'object') {
+                validated.socialMedia = this.validateSocialMedia(additionalInfo.socialMedia);
+            }
         }
 
         return validated;
