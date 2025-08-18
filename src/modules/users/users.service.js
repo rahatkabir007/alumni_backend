@@ -103,9 +103,19 @@ class UsersService {
                 );
             }
 
+            // Apply alumni_type filter with special handling for teacher_management
             if (alumni_type && alumni_type.trim()) {
-                queryBuilder.andWhere('user.alumni_type  ILIKE :alumni_type', { alumni_type: alumni_type.trim() });
+                const trimmedAlumniType = alumni_type.trim();
+
+                if (trimmedAlumniType === 'teacher_management') {
+                    // Special case: include both teacher and management types
+                    queryBuilder.andWhere('user.alumni_type IN (:...types)', { types: ['teacher', 'management'] });
+                } else {
+                    // Normal case: exact match
+                    queryBuilder.andWhere('user.alumni_type = :alumni_type', { alumni_type: trimmedAlumniType });
+                }
             }
+
             // Apply sorting
             queryBuilder.orderBy(`user.${validSortBy}`, validSortOrder);
 
@@ -151,6 +161,7 @@ class UsersService {
             throw error;
         }
     }
+
     async getUserById(id, includeDetails = false) {
         try {
             const userId = parseInt(id);
