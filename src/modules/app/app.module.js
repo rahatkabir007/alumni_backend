@@ -2,16 +2,14 @@ import express from "express"
 import cors from "cors"
 import session from "express-session"
 import passport from "passport"
-import { GalleriesModule } from "../galleries/galleries.module.js";
 import { connectDB } from "../../config/database.js";
 import { configurePassport } from "../../config/passport.js";
-import { logger } from "../../utils/logger.js"
 import { errorMiddleware } from "../../middlewares/error.middleware.js"
-import { authMiddleware } from "../../middlewares/auth.middleware.js"
 import { AppController } from "./app.controller.js";
 import { AppService } from "./app.service.js";
-import { UsersModule } from "../users/users.module.js";
 import { AuthModule } from "../auth/auth.module.js";
+import { UsersModule } from "../users/users.module.js";
+import { GalleriesModule } from "../galleries/galleries.module.js";
 import { allowedOrigins } from "../../config/allowedOrigins.js";
 
 let isDbConnected = false;
@@ -94,12 +92,12 @@ const AppModule = async (app) => {
     // Mount API router under /api prefix
     app.use('/api', apiRouter);
     // Error handling middleware (should be last)
-        GalleriesModule(app);
-app.use(errorMiddleware);
+    app.use(errorMiddleware);
 
     // Initialize other modules on API router
-    await AuthModule(apiRouter);
-    await UsersModule(apiRouter);
+    AuthModule(apiRouter);
+    UsersModule(apiRouter);
+    GalleriesModule(apiRouter);
 
     // Apply auth middleware to API routes (after auth routes are registered)
     // apiRouter.use(authMiddleware);
