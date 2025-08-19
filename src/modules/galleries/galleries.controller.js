@@ -24,7 +24,7 @@ class GalleriesController {
 
 
         // Get current user's galleries (authenticated)
-        app.get('/gallery/my/galleries', authMiddleware, asyncHandler(async (req, res) => {
+        app.get('/gallery/my', authMiddleware, asyncHandler(async (req, res) => {
             const userId = req.user.id;
             const result = await this.galleriesService.getUserGalleries(userId, req.query);
             return ResponseHandler.success(res, result, 'Your galleries retrieved successfully');
