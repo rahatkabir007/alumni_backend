@@ -16,7 +16,9 @@
     "debug:env": "node -e \"console.log(process.env)\"",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint .",
-    "seed": "node src/scripts/migrate.js seed"
+    "migrate": "node src/scripts/migrate.js migrate",
+    "seed": "node src/scripts/migrate.js seed",
+    "migrate:seed": "node src/scripts/migrate.js migrate:seed"
   },
   "notes": {
     "session-usage": "Sessions are only used for OAuth flow completion. Main authentication uses JWT tokens.",

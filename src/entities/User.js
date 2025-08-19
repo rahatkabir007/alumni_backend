@@ -155,5 +155,33 @@ export const User = new EntitySchema({
             type: 'timestamp',
             updateDate: true,
         },
+
     },
+    relations: {
+        galleries: {
+            type: 'one-to-many',
+            target: 'Gallery',
+            inverseSide: 'user'
+        },
+        blogs: {
+            type: 'one-to-many',
+            target: 'Blog',
+            inverseSide: 'user'
+        },
+        comments: {
+            type: 'one-to-many',
+            target: 'Comments',
+            inverseSide: 'user'
+        },
+        replies: {
+            type: 'one-to-many',
+            target: 'Replies',
+            inverseSide: 'user'
+        },
+        likes: {
+            type: 'one-to-many',
+            target: 'Likes',
+            inverseSide: 'user'
+        }
+    }
 });
