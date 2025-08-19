@@ -13,32 +13,26 @@ class GalleriesController {
     }
 
     registerRoutes(app) {
+
+
         // Get all galleries (public - with optional filters)
-        app.get('/', asyncHandler(async (req, res) => {
+
+        app.get('/galleries', asyncHandler(async (req, res) => {
             const result = await this.galleriesService.getAllGalleries(req.query);
             return ResponseHandler.success(res, result, 'Galleries retrieved successfully');
         }));
 
-        // Get galleries by user ID (public)
-        app.get('/user/:userId', asyncHandler(async (req, res) => {
-            const result = await this.galleriesService.getUserGalleries(req.params.userId, req.query);
-            return ResponseHandler.success(res, result, 'User galleries retrieved successfully');
-        }));
 
-        // Get gallery by ID with optional details (public)
-        app.get('/:id', asyncHandler(async (req, res) => {
-            const includeDetails = req.query.includeDetails === 'true';
-            const result = await this.galleriesService.getGalleryById(req.params.id, includeDetails);
-
-            if (!result) {
-                return ResponseHandler.notFound(res, 'Gallery not found');
-            }
-
-            return ResponseHandler.success(res, result, 'Gallery retrieved successfully');
+        // Get current user's galleries (authenticated)
+        app.get('/galleries/my/galleries', authMiddleware, asyncHandler(async (req, res) => {
+            const userId = req.user.id;
+            const result = await this.galleriesService.getUserGalleries(userId, req.query);
+            return ResponseHandler.success(res, result, 'Your galleries retrieved successfully');
         }));
 
         // Create new gallery (authenticated users only)
-        app.post('/', authMiddleware, asyncHandler(async (req, res) => {
+        app.post('/galleries', authMiddleware, asyncHandler(async (req, res) => {
+
             const userId = req.user.id;
             const galleryData = req.body;
 
@@ -60,8 +54,28 @@ class GalleriesController {
             return ResponseHandler.created(res, result, 'Gallery created successfully');
         }));
 
+
+        // Get galleries by user ID (public)
+        app.get('/galleries/user/:userId', asyncHandler(async (req, res) => {
+            const result = await this.galleriesService.getUserGalleries(req.params.userId, req.query);
+            return ResponseHandler.success(res, result, 'User galleries retrieved successfully');
+        }));
+
+        // Get gallery by ID with optional details (public)
+        app.get('/galleries/:id', asyncHandler(async (req, res) => {
+            const includeDetails = req.query.includeDetails === 'true';
+            const result = await this.galleriesService.getGalleryById(req.params.id, includeDetails);
+
+            if (!result) {
+                return ResponseHandler.notFound(res, 'Gallery not found');
+            }
+
+            return ResponseHandler.success(res, result, 'Gallery retrieved successfully');
+        }));
+
+
         // Update gallery by ID (owner, admin, or moderator)
-        app.patch('/:id', authMiddleware, asyncHandler(async (req, res) => {
+        app.patch('/galleries/:id', authMiddleware, asyncHandler(async (req, res) => {
             const userId = req.user.id;
             const userRoles = req.user.roles || [];
             const updateData = req.body;
@@ -77,7 +91,7 @@ class GalleriesController {
         }));
 
         // Update gallery status (admin or moderator only)
-        app.patch('/:id/status', authMiddleware, requireAdminOrModerator, asyncHandler(async (req, res) => {
+        app.patch('/galleries/:id/status', authMiddleware, requireAdminOrModerator, asyncHandler(async (req, res) => {
             const { status } = req.body;
             const userRoles = req.user.roles || [];
 
@@ -98,7 +112,7 @@ class GalleriesController {
         }));
 
         // Delete gallery by ID (owner, admin, or moderator)
-        app.delete('/:id', authMiddleware, asyncHandler(async (req, res) => {
+        app.delete('/galleries/:id', authMiddleware, asyncHandler(async (req, res) => {
             const userId = req.user.id;
             const userRoles = req.user.roles || [];
 
@@ -115,12 +129,7 @@ class GalleriesController {
             return ResponseHandler.success(res, null, 'Gallery deleted successfully');
         }));
 
-        // Get current user's galleries (authenticated)
-        app.get('/my/galleries', authMiddleware, asyncHandler(async (req, res) => {
-            const userId = req.user.id;
-            const result = await this.galleriesService.getUserGalleries(userId, req.query);
-            return ResponseHandler.success(res, result, 'Your galleries retrieved successfully');
-        }));
+
     }
 }
 

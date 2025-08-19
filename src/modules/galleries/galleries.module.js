@@ -7,11 +7,8 @@ const GalleriesModule = (app) => {
     const galleriesService = new GalleriesService();
     const galleriesController = new GalleriesController(galleriesService);
 
-    const router = express.Router();
+    galleriesController.registerRoutes(app);
 
-    galleriesController.registerRoutes(router);
-
-    app.use('/api/galleries', router);
 };
 
 export { GalleriesModule };
