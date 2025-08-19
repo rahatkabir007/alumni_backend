@@ -1,46 +1,45 @@
-import { EntitySchema } from 'typeorm'
-
+import { EntitySchema } from 'typeorm';
 
 export const Gallery = new EntitySchema({
     name: "Gallery",
     tableName: "galleries",
     columns: {
         id: {
-            type: 'int',
             primary: true,
-            generated: 'increment'
+            type: 'int',
+            generated: true
         },
         userId: {
             type: 'int',
-            nullable: false,
+            nullable: false
         },
         title: {
             type: 'varchar',
             length: 255,
-            nullable: true,
+            nullable: true
         },
         description: {
             type: 'text',
-            nullable: true,
+            nullable: true
         },
         year: {
             type: 'int',
-            nullable: false,
+            nullable: false
         },
         like_count: {
             type: 'int',
             default: 0,
-            nullable: false,
+            nullable: false
         },
         comment_count: {
             type: 'int',
             default: 0,
-            nullable: false,
+            nullable: false
         },
         image: {
             type: 'varchar',
             length: 500,
-            nullable: false,
+            nullable: false
         },
         status: {
             type: 'varchar',
@@ -51,13 +50,13 @@ export const Gallery = new EntitySchema({
         },
         createdAt: {
             type: 'timestamp',
-            default: () => "CURRENT_TIMESTAMP",
+            default: () => "CURRENT_TIMESTAMP"
         },
         updatedAt: {
             type: 'timestamp',
             default: () => "CURRENT_TIMESTAMP",
-            onUpdate: () => "CURRENT_TIMESTAMP",
-        },
+            onUpdate: () => "CURRENT_TIMESTAMP"
+        }
     },
     relations: {
         user: {
@@ -82,6 +81,18 @@ export const Gallery = new EntitySchema({
         {
             name: 'IDX_GALLERY_YEAR',
             columns: ['year']
+        },
+        {
+            name: 'IDX_GALLERY_STATUS_YEAR',
+            columns: ['status', 'year']
+        },
+        {
+            name: 'IDX_GALLERY_USER_STATUS',
+            columns: ['userId', 'status']
+        },
+        {
+            name: 'IDX_GALLERY_CREATED_AT',
+            columns: ['createdAt']
         }
     ]
-})
+});

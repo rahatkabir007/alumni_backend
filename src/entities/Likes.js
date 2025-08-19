@@ -13,7 +13,6 @@ export const Likes = new EntitySchema({
             type: 'int',
             nullable: false,
         },
-        // Polymorphic relationship fields
         likeable_type: {
             type: 'varchar',
             length: 50,
@@ -54,6 +53,10 @@ export const Likes = new EntitySchema({
             name: 'IDX_UNIQUE_LIKE',
             columns: ['userId', 'likeable_type', 'likeable_id'],
             unique: true
+        },
+        {
+            name: 'IDX_LIKE_CREATED_AT',
+            columns: ['createdAt']
         }
     ]
 });

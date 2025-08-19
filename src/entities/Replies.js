@@ -71,6 +71,18 @@ export const Replies = new EntitySchema({
         {
             name: 'IDX_USER_REPLIES',
             columns: ['userId']
+        },
+        {
+            name: 'IDX_REPLY_STATUS',
+            columns: ['status']
+        },
+        {
+            name: 'IDX_COMMENT_REPLY_STATUS',
+            columns: ['commentId', 'status']
+        },
+        {
+            name: 'IDX_REPLY_CREATED_AT',
+            columns: ['createdAt']
         }
     ]
 });

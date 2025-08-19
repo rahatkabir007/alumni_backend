@@ -98,6 +98,22 @@ export const Blog = new EntitySchema({
         {
             name: 'IDX_BLOG_SLUG',
             columns: ['slug']
+        },
+        {
+            name: 'IDX_BLOG_PUBLISHED',
+            columns: ['published_at']
+        },
+        {
+            name: 'IDX_BLOG_STATUS_PUBLISHED',
+            columns: ['status', 'published_at']
+        },
+        {
+            name: 'IDX_BLOG_USER_STATUS',
+            columns: ['userId', 'status']
+        },
+        {
+            name: 'IDX_BLOG_CREATED_AT',
+            columns: ['createdAt']
         }
     ]
 });

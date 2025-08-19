@@ -5,24 +5,24 @@ export const User = new EntitySchema({
     tableName: 'users',
     columns: {
         id: {
-            type: 'int',
             primary: true,
-            generated: 'increment',
+            type: 'int',
+            generated: true
         },
         email: {
             type: 'varchar',
             length: 255,
-            unique: true,
+            unique: true
         },
         password: {
             type: 'varchar',
             length: 255,
-            nullable: true,
+            nullable: true
         },
         name: {
             type: 'varchar',
             length: 255,
-            nullable: true,
+            nullable: true
         },
         phone: {
             type: 'varchar',
@@ -90,7 +90,7 @@ export const User = new EntitySchema({
             type: 'varchar',
             length: 500,
             default: '',
-            nullable: false,
+            nullable: false
         },
         profilePhotoSource: {
             type: 'varchar',
@@ -123,17 +123,17 @@ export const User = new EntitySchema({
         roles: {
             type: 'json',
             default: () => "'[\"user\"]'",
-            nullable: false,
+            nullable: false
         },
         googleId: {
             type: 'varchar',
             length: 255,
-            nullable: true,
+            nullable: true
         },
         provider: {
             type: 'varchar',
             length: 50,
-            default: 'email',
+            default: 'email'
         },
         isProfileCompleted: {
             type: 'boolean',
@@ -149,13 +149,12 @@ export const User = new EntitySchema({
         },
         created_at: {
             type: 'timestamp',
-            createDate: true,
+            createDate: true
         },
         updated_at: {
             type: 'timestamp',
-            updateDate: true,
-        },
-
+            updateDate: true
+        }
     },
     relations: {
         galleries: {
@@ -183,5 +182,52 @@ export const User = new EntitySchema({
             target: 'Likes',
             inverseSide: 'user'
         }
-    }
+    },
+    indices: [
+        {
+            name: 'IDX_USER_EMAIL',
+            columns: ['email'],
+            unique: true
+        },
+        {
+            name: 'IDX_USER_STATUS',
+            columns: ['status']
+        },
+        {
+            name: 'IDX_USER_ALUMNI_TYPE',
+            columns: ['alumni_type']
+        },
+        {
+            name: 'IDX_USER_BRANCH',
+            columns: ['branch']
+        },
+        {
+            name: 'IDX_USER_GRADUATION_YEAR',
+            columns: ['graduation_year']
+        },
+        {
+            name: 'IDX_USER_PROVIDER',
+            columns: ['provider']
+        },
+        {
+            name: 'IDX_USER_PROFILE_COMPLETED',
+            columns: ['isProfileCompleted']
+        },
+        {
+            name: 'IDX_USER_EMAIL_VERIFIED',
+            columns: ['isEmailVerified']
+        },
+        {
+            name: 'IDX_USER_GRADUATED',
+            columns: ['isGraduated']
+        },
+        {
+            name: 'IDX_USER_STATUS_ALUMNI_TYPE',
+            columns: ['status', 'alumni_type']
+        },
+        {
+            name: 'IDX_USER_BRANCH_GRADUATED',
+            columns: ['branch', 'isGraduated']
+        }
+    ]
 });

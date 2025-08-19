@@ -182,6 +182,7 @@ class UsersService {
                 selectFields.push('additional_information', 'verification_fields');
             }
 
+            // ✅ FASTEST: Uses primary key index
             return await this.userRepository.findOne({
                 where: { id: userId },
                 select: selectFields
