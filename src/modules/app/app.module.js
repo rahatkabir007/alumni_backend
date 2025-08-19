@@ -2,6 +2,7 @@ import express from "express"
 import cors from "cors"
 import session from "express-session"
 import passport from "passport"
+import { GalleriesModule } from "../galleries/galleries.module.js";
 import { connectDB } from "../../config/database.js";
 import { configurePassport } from "../../config/passport.js";
 import { logger } from "../../utils/logger.js"
@@ -93,7 +94,8 @@ const AppModule = async (app) => {
     // Mount API router under /api prefix
     app.use('/api', apiRouter);
     // Error handling middleware (should be last)
-    app.use(errorMiddleware);
+        GalleriesModule(app);
+app.use(errorMiddleware);
 
     // Initialize other modules on API router
     await AuthModule(apiRouter);
