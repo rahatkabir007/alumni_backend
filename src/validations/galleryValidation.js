@@ -280,19 +280,29 @@ export class GalleryValidator {
         }
 
         // Validate year filter
-        if (year && year.trim()) {
+        if (year && typeof year === 'string' && year.trim()) {
             try {
                 validated.year = this.validateYear(year.trim(), false);
             } catch (error) {
                 // Ignore invalid year filters
                 validated.year = null;
             }
+        } else if (year && typeof year === 'number') {
+            try {
+                validated.year = this.validateYear(year, false);
+            } catch (error) {
+                validated.year = null;
+            }
         }
 
-        // Validate userId filter
-        if (userId && userId.trim()) {
+        // Validate userId filter - handle both string and number types
+        if (userId) {
             try {
-                validated.userId = this.validateUserId(userId.trim(), false);
+                if (typeof userId === 'string' && userId.trim()) {
+                    validated.userId = this.validateUserId(userId.trim(), false);
+                } else if (typeof userId === 'number' || !isNaN(parseInt(userId))) {
+                    validated.userId = this.validateUserId(userId, false);
+                }
             } catch (error) {
                 // Ignore invalid userId filters
                 validated.userId = null;

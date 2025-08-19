@@ -91,8 +91,19 @@ class GalleriesService {
 
     async getGalleryById(id, includeDetails = false) {
         try {
-            // Validate gallery ID
-            const galleryId = GalleryValidator.validateUserId(id);
+            // Fix: Handle both string and number types for gallery ID
+            let galleryId;
+            if (typeof id === 'string') {
+                galleryId = parseInt(id);
+            } else if (typeof id === 'number') {
+                galleryId = id;
+            } else {
+                throw new Error('Invalid gallery ID type');
+            }
+
+            if (isNaN(galleryId) || galleryId <= 0) {
+                throw new Error('Invalid gallery ID');
+            }
 
             const queryBuilder = this.galleryRepository.createQueryBuilder('gallery');
 

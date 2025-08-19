@@ -87,9 +87,16 @@ class CommentsService {
                 includeReplies = true
             } = queryParams;
 
-            const pageNum = Math.max(1, parseInt(page));
-            const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+            // Fix: Ensure proper type handling for pagination
+            const pageNum = Math.max(1, parseInt(page) || 1);
+            const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 20));
             const offset = (pageNum - 1) * limitNum;
+
+            // Fix: Ensure commentable_id is properly parsed as integer
+            const parsedCommentableId = parseInt(commentable_id);
+            if (isNaN(parsedCommentableId)) {
+                throw new Error('Invalid commentable ID');
+            }
 
             const queryBuilder = this.commentsRepository.createQueryBuilder('comment');
 
@@ -106,7 +113,7 @@ class CommentsService {
 
             // Filter by entity
             queryBuilder.where('comment.commentable_type = :type', { type: commentable_type });
-            queryBuilder.andWhere('comment.commentable_id = :id', { id: commentable_id });
+            queryBuilder.andWhere('comment.commentable_id = :id', { id: parsedCommentableId });
             queryBuilder.andWhere('comment.status = :status', { status: 'active' });
 
             // Apply sorting
