@@ -11,7 +11,8 @@ class CommentsController {
         // Get comments for a specific entity (public)
         app.get('/:type/:id/comments', asyncHandler(async (req, res) => {
             const { type, id } = req.params;
-            const result = await this.commentsService.getComments(type, id, req.query);
+            const userId = req.user?.id; // Get user ID if authenticated
+            const result = await this.commentsService.getComments(type, id, req.query, userId);
             return ResponseHandler.success(res, result, 'Comments retrieved successfully');
         }));
 

@@ -14,11 +14,10 @@ class GalleriesController {
 
     registerRoutes(app) {
 
-
         // Get all galleries (public - with optional filters)
-
         app.get('/gallery', asyncHandler(async (req, res) => {
-            const result = await this.galleriesService.getAllGalleries(req.query);
+            const userId = req.user?.id; // Get user ID if authenticated
+            const result = await this.galleriesService.getAllGalleries(req.query, userId);
             return ResponseHandler.success(res, result, 'Galleries retrieved successfully');
         }));
 
@@ -26,7 +25,7 @@ class GalleriesController {
         // Get current user's galleries (authenticated)
         app.get('/gallery/my', authMiddleware, asyncHandler(async (req, res) => {
             const userId = req.user.id;
-            const result = await this.galleriesService.getUserGalleries(userId, req.query);
+            const result = await this.galleriesService.getUserGalleries(userId, req.query, userId);
             return ResponseHandler.success(res, result, 'Your galleries retrieved successfully');
         }));
 
@@ -57,14 +56,16 @@ class GalleriesController {
 
         // Get galleries by user ID (public)
         app.get('/gallery/user/:userId', asyncHandler(async (req, res) => {
-            const result = await this.galleriesService.getUserGalleries(req.params.userId, req.query);
+            const currentUserId = req.user?.id; // Get current user ID if authenticated
+            const result = await this.galleriesService.getUserGalleries(req.params.userId, req.query, currentUserId);
             return ResponseHandler.success(res, result, 'User galleries retrieved successfully');
         }));
 
         // Get gallery by ID with optional details (public)
         app.get('/gallery/:id', asyncHandler(async (req, res) => {
             const includeDetails = req.query.includeDetails === 'true';
-            const result = await this.galleriesService.getGalleryById(req.params.id, includeDetails);
+            const userId = req.user?.id; // Get user ID if authenticated
+            const result = await this.galleriesService.getGalleryById(req.params.id, includeDetails, userId);
 
             if (!result) {
                 return ResponseHandler.notFound(res, 'Gallery not found');

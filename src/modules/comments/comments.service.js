@@ -78,7 +78,7 @@ class CommentsService {
     }
 
     // Get comments for a specific entity
-    async getComments(commentable_type, commentable_id, queryParams = {}) {
+    async getComments(commentable_type, commentable_id, queryParams = {}, userId = null) {
         try {
             const {
                 page = 1,
@@ -109,6 +109,17 @@ class CommentsService {
                 'user.profilePhoto'
             ]);
 
+            // Include like status for comments if user is authenticated
+            if (userId) {
+                queryBuilder.leftJoin(
+                    'comment.likes',
+                    'commentUserLike',
+                    'commentUserLike.likeable_type = :commentLikeableType AND commentUserLike.likeable_id = comment.id AND commentUserLike.userId = :userId',
+                    { commentLikeableType: 'comment', userId: parseInt(userId) }
+                );
+                queryBuilder.addSelect('commentUserLike.id as commentUserLikeId');
+            }
+
             // Include replies if requested with specific user info only
             if (includeReplies) {
                 queryBuilder.leftJoin('comment.replies', 'replies', 'replies.status = :replyStatus', { replyStatus: 'active' });
@@ -124,6 +135,17 @@ class CommentsService {
                     'replyUser.email',
                     'replyUser.profilePhoto'
                 ]);
+
+                // Include like status for replies if user is authenticated
+                if (userId) {
+                    queryBuilder.leftJoin(
+                        'replies.likes',
+                        'replyUserLike',
+                        'replyUserLike.likeable_type = :replyLikeableType AND replyUserLike.likeable_id = replies.id AND replyUserLike.userId = :userId',
+                        { replyLikeableType: 'reply' }
+                    );
+                    queryBuilder.addSelect('replyUserLike.id as replyUserLikeId');
+                }
             }
 
             // Filter by entity
@@ -147,13 +169,23 @@ class CommentsService {
 
             const comments = await queryBuilder.getMany();
 
+            // Post-process to add like status
+            const processedComments = comments.map(comment => ({
+                ...comment,
+                isLikedByCurrentUser: userId ? !!comment.commentUserLikeId : false,
+                replies: comment.replies ? comment.replies.map(reply => ({
+                    ...reply,
+                    isLikedByCurrentUser: userId ? !!reply.replyUserLikeId : false
+                })) : []
+            }));
+
             // Calculate pagination metadata
             const totalPages = Math.ceil(totalItems / limitNum);
             const hasNextPage = pageNum < totalPages;
             const hasPrevPage = pageNum > 1;
 
             return {
-                comments,
+                comments: processedComments,
                 currentPage: pageNum,
                 totalPages,
                 totalItems,

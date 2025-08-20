@@ -31,7 +31,7 @@ class GalleriesService {
         }
     }
 
-    async getAllGalleries(queryParams = {}) {
+    async getAllGalleries(queryParams = {}, userId = null) {
         try {
             // Use centralized validation for query parameters
             const validated = GalleryValidator.validateQueryParams(queryParams);
@@ -47,6 +47,17 @@ class GalleriesService {
                 'user.email',
                 'user.profilePhoto'
             ]);
+
+            // If user is authenticated, include like status
+            if (userId) {
+                queryBuilder.leftJoin(
+                    'gallery.likes',
+                    'userLike',
+                    'userLike.likeable_type = :likeableType AND userLike.likeable_id = gallery.id AND userLike.userId = :userId',
+                    { likeableType: 'gallery', userId: parseInt(userId) }
+                );
+                queryBuilder.addSelect('userLike.id as userLikeId');
+            }
 
             // Apply filters
             if (validated.status) {
@@ -72,13 +83,19 @@ class GalleriesService {
 
             const galleries = await queryBuilder.getMany();
 
+            // Post-process to add like status for authenticated users
+            const processedGalleries = galleries.map(gallery => ({
+                ...gallery,
+                isLikedByCurrentUser: userId ? !!gallery.userLikeId : false
+            }));
+
             // Calculate pagination metadata
             const totalPages = Math.ceil(totalItems / validated.limit);
             const hasNextPage = validated.page < totalPages;
             const hasPrevPage = validated.page > 1;
 
             return {
-                galleries,
+                galleries: processedGalleries,
                 currentPage: validated.page,
                 totalPages,
                 totalItems,
@@ -92,7 +109,7 @@ class GalleriesService {
         }
     }
 
-    async getGalleryById(id, includeDetails = false) {
+    async getGalleryById(id, includeDetails = false, userId = null) {
         try {
             // Fix: Handle both string and number types for gallery ID
             let galleryId;
@@ -119,6 +136,17 @@ class GalleriesService {
                 'user.profilePhoto'
             ]);
 
+            // If user is authenticated, include like status for gallery
+            if (userId) {
+                queryBuilder.leftJoin(
+                    'gallery.likes',
+                    'userLike',
+                    'userLike.likeable_type = :likeableType AND userLike.likeable_id = gallery.id AND userLike.userId = :userId',
+                    { likeableType: 'gallery', userId: parseInt(userId) }
+                );
+                queryBuilder.addSelect('userLike.id as userLikeId');
+            }
+
             // Include additional details if requested
             if (includeDetails) {
                 // Include comments with specific user info only
@@ -137,6 +165,17 @@ class GalleriesService {
                     'commentUser.profilePhoto'
                 ]);
 
+                // Include like status for comments if user is authenticated
+                if (userId) {
+                    queryBuilder.leftJoin(
+                        'comments.likes',
+                        'commentUserLike',
+                        'commentUserLike.likeable_type = :commentLikeableType AND commentUserLike.likeable_id = comments.id AND commentUserLike.userId = :userId',
+                        { commentLikeableType: 'comment' }
+                    );
+                    queryBuilder.addSelect('commentUserLike.id as commentUserLikeId');
+                }
+
                 // Include replies to comments with specific user info only
                 queryBuilder.leftJoin('comments.replies', 'replies', 'replies.status = :replyStatus', { replyStatus: 'active' });
                 queryBuilder.leftJoin('replies.user', 'replyUser');
@@ -152,6 +191,17 @@ class GalleriesService {
                     'replyUser.profilePhoto'
                 ]);
 
+                // Include like status for replies if user is authenticated
+                if (userId) {
+                    queryBuilder.leftJoin(
+                        'replies.likes',
+                        'replyUserLike',
+                        'replyUserLike.likeable_type = :replyLikeableType AND replyUserLike.likeable_id = replies.id AND replyUserLike.userId = :userId',
+                        { replyLikeableType: 'reply' }
+                    );
+                    queryBuilder.addSelect('replyUserLike.id as replyUserLikeId');
+                }
+
                 // Order comments and replies by creation date
                 queryBuilder.addOrderBy('comments.createdAt', 'ASC');
                 queryBuilder.addOrderBy('replies.createdAt', 'ASC');
@@ -165,7 +215,25 @@ class GalleriesService {
                 return null;
             }
 
-            return gallery;
+            // Post-process to add like status
+            const processedGallery = {
+                ...gallery,
+                isLikedByCurrentUser: userId ? !!gallery.userLikeId : false
+            };
+
+            // Process comments and replies for like status
+            if (includeDetails && processedGallery.comments) {
+                processedGallery.comments = processedGallery.comments.map(comment => ({
+                    ...comment,
+                    isLikedByCurrentUser: userId ? !!comment.commentUserLikeId : false,
+                    replies: comment.replies ? comment.replies.map(reply => ({
+                        ...reply,
+                        isLikedByCurrentUser: userId ? !!reply.replyUserLikeId : false
+                    })) : []
+                }));
+            }
+
+            return processedGallery;
         } catch (error) {
             console.error('Get gallery by ID error:', error);
             throw error;
@@ -238,13 +306,13 @@ class GalleriesService {
         }
     }
 
-    async getUserGalleries(userId, queryParams = {}) {
+    async getUserGalleries(userId, queryParams = {}, currentUserId = null) {
         try {
             const userIdNum = GalleryValidator.validateUserId(userId);
 
             // Use getAllGalleries with userId filter
             const params = { ...queryParams, userId: userIdNum };
-            return await this.getAllGalleries(params);
+            return await this.getAllGalleries(params, currentUserId);
         } catch (error) {
             console.error('Get user galleries error:', error);
             throw error;
