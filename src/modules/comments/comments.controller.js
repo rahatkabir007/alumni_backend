@@ -55,6 +55,74 @@ class CommentsController {
             const result = await this.commentsService.getLikeStatus(type, id, userId);
             return ResponseHandler.success(res, result, 'Like status retrieved successfully');
         }));
+
+        // Update a comment (authenticated)
+        app.patch('/comments/:commentId', authMiddleware, asyncHandler(async (req, res) => {
+            const userId = req.user.id;
+            const userRoles = req.user.roles || [];
+
+            const result = await this.commentsService.updateComment(
+                req.params.commentId,
+                req.body,
+                userId,
+                userRoles
+            );
+
+            return ResponseHandler.success(res, result, 'Comment updated successfully');
+        }));
+
+        // Delete a comment (authenticated)
+        app.delete('/comments/:commentId', authMiddleware, asyncHandler(async (req, res) => {
+            const userId = req.user.id;
+            const userRoles = req.user.roles || [];
+
+            const result = await this.commentsService.deleteComment(
+                req.params.commentId,
+                userId,
+                userRoles
+            );
+
+            return ResponseHandler.success(res, null, 'Comment deleted successfully');
+        }));
+
+        // Update a reply (authenticated)
+        app.patch('/replies/:replyId', authMiddleware, asyncHandler(async (req, res) => {
+            const userId = req.user.id;
+            const userRoles = req.user.roles || [];
+
+            const result = await this.commentsService.updateReply(
+                req.params.replyId,
+                req.body,
+                userId,
+                userRoles
+            );
+
+            return ResponseHandler.success(res, result, 'Reply updated successfully');
+        }));
+
+        // Delete a reply (authenticated)
+        app.delete('/replies/:replyId', authMiddleware, asyncHandler(async (req, res) => {
+            const userId = req.user.id;
+            const userRoles = req.user.roles || [];
+
+            const result = await this.commentsService.deleteReply(
+                req.params.replyId,
+                userId,
+                userRoles
+            );
+
+            return ResponseHandler.success(res, null, 'Reply deleted successfully');
+        }));
+
+        // Get nested replies for a specific reply (public - with optional auth for like status)
+        app.get('/replies/:replyId/nested', optionalAuthMiddleware, asyncHandler(async (req, res) => {
+            // Get userId from auth or query parameter
+            const userId = req.user?.id || req.query.userId || null;
+            const maxDepth = parseInt(req.query.maxDepth) || 3;
+
+            const result = await this.commentsService.getNestedReplies(req.params.replyId, maxDepth, userId);
+            return ResponseHandler.success(res, result, 'Nested replies retrieved successfully');
+        }));
     }
 }
 

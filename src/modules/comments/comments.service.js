@@ -289,7 +289,7 @@ class CommentsService {
     // Helper method to update comment count (including ALL replies recursively)
     async updateCommentCount(commentable_type, commentable_id) {
         try {
-            // Simple but comprehensive query to count all comments and replies
+            // Fixed SQL query with correct column name (case-sensitive)
             const countQuery = `
                 SELECT COUNT(*) as total_count FROM (
                     SELECT id FROM comments 
@@ -298,7 +298,7 @@ class CommentsService {
                     UNION ALL
                     
                     SELECT r.id FROM replies r
-                    INNER JOIN comments c ON r.commentId = c.id
+                    INNER JOIN comments c ON r."commentId" = c.id
                     WHERE c.commentable_type = $1 AND c.commentable_id = $2 
                     AND r.status = 'active' AND c.status = 'active'
                 ) as combined
@@ -316,6 +316,205 @@ class CommentsService {
             return totalCount;
         } catch (error) {
             console.error('Update comment count error:', error);
+            throw error;
+        }
+    }
+
+    // Helper method to update reply count on comment (direct replies only)
+    async updateReplyCount(commentId) {
+        try {
+            const count = await this.repliesRepository.count({
+                where: {
+                    commentId: parseInt(commentId),
+                    status: 'active',
+                    parentReplyId: null // Only count direct replies to the comment
+                }
+            });
+
+            await this.commentsRepository.update(parseInt(commentId), { reply_count: count });
+        } catch (error) {
+            console.error('Update reply count error:', error);
+        }
+    }
+
+    // Helper method to update nested reply count
+    async updateNestedReplyCount(parentReplyId) {
+        try {
+            const count = await this.repliesRepository.count({
+                where: {
+                    parentReplyId: parseInt(parentReplyId),
+                    status: 'active'
+                }
+            });
+
+            await this.repliesRepository.update(parseInt(parentReplyId), { reply_count: count });
+        } catch (error) {
+            console.error('Update nested reply count error:', error);
+        }
+    }
+
+    // Update a comment
+    async updateComment(commentId, updateData, userId, userRoles = []) {
+        try {
+            const comment = await this.commentsRepository.findOne({
+                where: { id: parseInt(commentId) },
+                relations: ['user']
+            });
+
+            if (!comment) {
+                throw new Error('Comment not found');
+            }
+
+            // Check permissions
+            const isOwner = comment.userId === parseInt(userId);
+            const isAdmin = userRoles.includes('admin');
+            const isModerator = userRoles.includes('moderator');
+
+            if (!isOwner && !isAdmin && !isModerator) {
+                throw new Error('You do not have permission to update this comment');
+            }
+
+            // Validate content if being updated
+            if (updateData.content !== undefined) {
+                const validatedContent = CommentsValidator.validateContent(updateData.content, 1000);
+                comment.content = validatedContent;
+            }
+
+            // Only admin/moderator can update status
+            if (updateData.status !== undefined && (isAdmin || isModerator)) {
+                const validStatuses = ['active', 'hidden', 'deleted'];
+                if (validStatuses.includes(updateData.status)) {
+                    comment.status = updateData.status;
+                }
+            }
+
+            const updatedComment = await this.commentsRepository.save(comment);
+            return updatedComment;
+        } catch (error) {
+            console.error('Update comment error:', error);
+            throw error;
+        }
+    }
+
+    // Delete a comment
+    async deleteComment(commentId, userId, userRoles = []) {
+        try {
+            const comment = await this.commentsRepository.findOne({
+                where: { id: parseInt(commentId) }
+            });
+
+            if (!comment) {
+                throw new Error('Comment not found');
+            }
+
+            // Check permissions
+            const isOwner = comment.userId === parseInt(userId);
+            const isAdmin = userRoles.includes('admin');
+            const isModerator = userRoles.includes('moderator');
+
+            if (!isOwner && !isAdmin && !isModerator) {
+                throw new Error('You do not have permission to delete this comment');
+            }
+
+            // Soft delete by updating status
+            comment.status = 'deleted';
+            await this.commentsRepository.save(comment);
+
+            // Update comment count on target entity (this will recalculate total)
+            await this.updateCommentCount(comment.commentable_type, comment.commentable_id);
+
+            return true;
+        } catch (error) {
+            console.error('Delete comment error:', error);
+            throw error;
+        }
+    }
+
+    // Update a reply
+    async updateReply(replyId, updateData, userId, userRoles = []) {
+        try {
+            const reply = await this.repliesRepository.findOne({
+                where: { id: parseInt(replyId) },
+                relations: ['user']
+            });
+
+            if (!reply) {
+                throw new Error('Reply not found');
+            }
+
+            // Check permissions
+            const isOwner = reply.userId === parseInt(userId);
+            const isAdmin = userRoles.includes('admin');
+            const isModerator = userRoles.includes('moderator');
+
+            if (!isOwner && !isAdmin && !isModerator) {
+                throw new Error('You do not have permission to update this reply');
+            }
+
+            // Validate content if being updated
+            if (updateData.content !== undefined) {
+                const validatedContent = CommentsValidator.validateContent(updateData.content, 500);
+                reply.content = validatedContent;
+            }
+
+            // Only admin/moderator can update status
+            if (updateData.status !== undefined && (isAdmin || isModerator)) {
+                const validStatuses = ['active', 'hidden', 'deleted'];
+                if (validStatuses.includes(updateData.status)) {
+                    reply.status = updateData.status;
+                }
+            }
+
+            const updatedReply = await this.repliesRepository.save(reply);
+            return updatedReply;
+        } catch (error) {
+            console.error('Update reply error:', error);
+            throw error;
+        }
+    }
+
+    // Delete a reply
+    async deleteReply(replyId, userId, userRoles = []) {
+        try {
+            const reply = await this.repliesRepository.findOne({
+                where: { id: parseInt(replyId) }
+            });
+
+            if (!reply) {
+                throw new Error('Reply not found');
+            }
+
+            // Check permissions
+            const isOwner = reply.userId === parseInt(userId);
+            const isAdmin = userRoles.includes('admin');
+            const isModerator = userRoles.includes('moderator');
+
+            if (!isOwner && !isAdmin && !isModerator) {
+                throw new Error('You do not have permission to delete this reply');
+            }
+
+            // Soft delete by updating status
+            reply.status = 'deleted';
+            await this.repliesRepository.save(reply);
+
+            // Update reply count on comment or parent reply
+            if (reply.parentReplyId) {
+                await this.updateNestedReplyCount(reply.parentReplyId);
+            } else {
+                await this.updateReplyCount(reply.commentId);
+            }
+
+            // Update total comment count on the target entity (gallery/blog)
+            const comment = await this.commentsRepository.findOne({
+                where: { id: reply.commentId }
+            });
+            if (comment) {
+                await this.updateCommentCount(comment.commentable_type, comment.commentable_id);
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Delete reply error:', error);
             throw error;
         }
     }
