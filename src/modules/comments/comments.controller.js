@@ -1,4 +1,4 @@
-import { authMiddleware } from "../../middlewares/auth.middleware.js";
+import { authMiddleware, optionalAuthMiddleware } from "../../middlewares/auth.middleware.js";
 import { ResponseHandler } from "../../utils/responseHandler.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 
@@ -8,10 +8,11 @@ class CommentsController {
     }
 
     registerRoutes(app) {
-        // Get comments for a specific entity (public)
-        app.get('/:type/:id/comments', asyncHandler(async (req, res) => {
+        // Get comments for a specific entity (public - with optional auth for like status)
+        app.get('/:type/:id/comments', optionalAuthMiddleware, asyncHandler(async (req, res) => {
             const { type, id } = req.params;
-            const userId = req.user?.id; // Get user ID if authenticated
+            // Get userId from auth or query parameter
+            const userId = req.user?.id || req.query.userId || null;
             const result = await this.commentsService.getComments(type, id, req.query, userId);
             return ResponseHandler.success(res, result, 'Comments retrieved successfully');
         }));
@@ -74,6 +75,20 @@ class CommentsController {
             return ResponseHandler.created(res, result, 'Reply created successfully');
         }));
 
+        // Create a nested reply to another reply (authenticated)
+        app.post('/replies/:parentReplyId/replies', authMiddleware, asyncHandler(async (req, res) => {
+            const userId = req.user.id;
+            const parentReplyId = req.params.parentReplyId;
+
+            const replyData = {
+                ...req.body,
+                parentReplyId
+            };
+
+            const result = await this.commentsService.createReply(replyData, userId);
+            return ResponseHandler.created(res, result, 'Nested reply created successfully');
+        }));
+
         // Update a reply (authenticated)
         app.patch('/replies/:replyId', authMiddleware, asyncHandler(async (req, res) => {
             const userId = req.user.id;
@@ -103,6 +118,16 @@ class CommentsController {
             return ResponseHandler.success(res, null, 'Reply deleted successfully');
         }));
 
+        // Get nested replies for a specific reply (public - with optional auth for like status)
+        app.get('/replies/:replyId/nested', optionalAuthMiddleware, asyncHandler(async (req, res) => {
+            // Get userId from auth or query parameter
+            const userId = req.user?.id || req.query.userId || null;
+            const maxDepth = parseInt(req.query.maxDepth) || 3;
+
+            const result = await this.commentsService.getNestedReplies(req.params.replyId, maxDepth, userId);
+            return ResponseHandler.success(res, result, 'Nested replies retrieved successfully');
+        }));
+
         // Toggle like on any entity (authenticated)
         app.post('/like', authMiddleware, asyncHandler(async (req, res) => {
             const userId = req.user.id;
@@ -119,10 +144,11 @@ class CommentsController {
             return ResponseHandler.success(res, result, `Successfully ${result.action}`);
         }));
 
-        // Get like status for an entity (public, but shows user-specific data if authenticated)
-        app.get('/like-status/:type/:id', asyncHandler(async (req, res) => {
+        // Get like status for an entity (public - with optional auth for user-specific data)
+        app.get('/like-status/:type/:id', optionalAuthMiddleware, asyncHandler(async (req, res) => {
             const { type, id } = req.params;
-            const userId = req.user?.id; // Optional authentication
+            // Get userId from auth or query parameter
+            const userId = req.user?.id || req.query.userId || null;
 
             const result = await this.commentsService.getLikeStatus(type, id, userId);
             return ResponseHandler.success(res, result, 'Like status retrieved successfully');

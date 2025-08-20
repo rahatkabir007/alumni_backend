@@ -84,15 +84,14 @@ class CommentsService {
                 page = 1,
                 limit = 20,
                 sortOrder = 'ASC',
-                includeReplies = true
+                includeReplies = true,
+                maxDepth = 3
             } = queryParams;
 
-            // Fix: Ensure proper type handling for pagination
             const pageNum = Math.max(1, parseInt(page) || 1);
             const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 20));
             const offset = (pageNum - 1) * limitNum;
 
-            // Fix: Ensure commentable_id is properly parsed as integer
             const parsedCommentableId = parseInt(commentable_id);
             if (isNaN(parsedCommentableId)) {
                 throw new Error('Invalid commentable ID');
@@ -112,40 +111,12 @@ class CommentsService {
             // Include like status for comments if user is authenticated
             if (userId) {
                 queryBuilder.leftJoin(
-                    'comment.likes',
+                    'Likes',
                     'commentUserLike',
-                    'commentUserLike.likeable_type = :commentLikeableType AND commentUserLike.likeable_id = comment.id AND commentUserLike.userId = :userId',
-                    { commentLikeableType: 'comment', userId: parseInt(userId) }
+                    'commentUserLike.likeable_type = :commentLikeableType AND commentUserLike.likeable_id = comment.id AND commentUserLike.userId = :currentUserId',
+                    { commentLikeableType: 'comment', currentUserId: parseInt(userId) }
                 );
-                queryBuilder.addSelect('commentUserLike.id as commentUserLikeId');
-            }
-
-            // Include replies if requested with specific user info only
-            if (includeReplies) {
-                queryBuilder.leftJoin('comment.replies', 'replies', 'replies.status = :replyStatus', { replyStatus: 'active' });
-                queryBuilder.leftJoin('replies.user', 'replyUser');
-                queryBuilder.addSelect([
-                    'replies.id',
-                    'replies.content',
-                    'replies.like_count',
-                    'replies.createdAt',
-                    'replies.updatedAt',
-                    'replyUser.id',
-                    'replyUser.name',
-                    'replyUser.email',
-                    'replyUser.profilePhoto'
-                ]);
-
-                // Include like status for replies if user is authenticated
-                if (userId) {
-                    queryBuilder.leftJoin(
-                        'replies.likes',
-                        'replyUserLike',
-                        'replyUserLike.likeable_type = :replyLikeableType AND replyUserLike.likeable_id = replies.id AND replyUserLike.userId = :userId',
-                        { replyLikeableType: 'reply' }
-                    );
-                    queryBuilder.addSelect('replyUserLike.id as replyUserLikeId');
-                }
+                queryBuilder.addSelect('CASE WHEN commentUserLike.id IS NOT NULL THEN true ELSE false END', 'commentIsLiked');
             }
 
             // Filter by entity
@@ -157,27 +128,34 @@ class CommentsService {
             const validSortOrder = ['ASC', 'DESC'].includes(sortOrder.toUpperCase()) ? sortOrder.toUpperCase() : 'ASC';
             queryBuilder.orderBy('comment.createdAt', validSortOrder);
 
-            if (includeReplies) {
-                queryBuilder.addOrderBy('replies.createdAt', 'ASC');
-            }
-
             // Get total count
             const totalItems = await queryBuilder.getCount();
 
             // Apply pagination
             queryBuilder.skip(offset).take(limitNum);
 
-            const comments = await queryBuilder.getMany();
+            const result = await queryBuilder.getRawAndEntities();
 
-            // Post-process to add like status
-            const processedComments = comments.map(comment => ({
-                ...comment,
-                isLikedByCurrentUser: userId ? !!comment.commentUserLikeId : false,
-                replies: comment.replies ? comment.replies.map(reply => ({
-                    ...reply,
-                    isLikedByCurrentUser: userId ? !!reply.replyUserLikeId : false
-                })) : []
-            }));
+            // Post-process to add like status and fetch nested replies
+            const processedComments = [];
+
+            for (let i = 0; i < result.entities.length; i++) {
+                const comment = result.entities[i];
+                const rawResult = result.raw[i];
+
+                const processedComment = {
+                    ...comment,
+                    isLikedByCurrentUser: userId ? (rawResult.commentIsLiked === true || rawResult.commentIsLiked === 'true') : false,
+                    replies: []
+                };
+
+                // Fetch nested replies if requested
+                if (includeReplies) {
+                    processedComment.replies = await this.getNestedReplies(comment.id, maxDepth, userId);
+                }
+
+                processedComments.push(processedComment);
+            }
 
             // Calculate pagination metadata
             const totalPages = Math.ceil(totalItems / limitNum);
@@ -283,10 +261,10 @@ class CommentsService {
         }
     }
 
-    // Create a reply to a comment
+    // Create a reply to a comment OR a nested reply to another reply
     async createReply(replyData, userId) {
         try {
-            const { commentId, content } = replyData;
+            const { commentId, parentReplyId, content } = replyData;
 
             // Validate content
             if (!content || content.trim().length === 0) {
@@ -297,27 +275,59 @@ class CommentsService {
                 throw new Error('Reply content cannot exceed 500 characters');
             }
 
-            // Verify comment exists and is active
-            const comment = await this.commentsRepository.findOne({
-                where: { id: commentId, status: 'active' }
-            });
+            let depth = 0;
+            let actualCommentId = commentId;
 
-            if (!comment) {
-                throw new Error('Comment not found or not available for replies');
+            if (parentReplyId) {
+                // This is a nested reply - validate parent reply exists
+                const parentReply = await this.repliesRepository.findOne({
+                    where: { id: parentReplyId, status: 'active' }
+                });
+
+                if (!parentReply) {
+                    throw new Error('Parent reply not found or not available');
+                }
+
+                // Set depth and comment ID based on parent
+                depth = parentReply.depth + 1;
+                actualCommentId = parentReply.commentId;
+
+                // Optional: Limit nesting depth to prevent infinite nesting
+                const maxDepth = 5; // Allow up to 5 levels of nesting
+                if (depth > maxDepth) {
+                    throw new Error(`Maximum reply depth of ${maxDepth} exceeded`);
+                }
+            } else if (commentId) {
+                // This is a direct reply to a comment
+                const comment = await this.commentsRepository.findOne({
+                    where: { id: commentId, status: 'active' }
+                });
+
+                if (!comment) {
+                    throw new Error('Comment not found or not available for replies');
+                }
+            } else {
+                throw new Error('Either commentId or parentReplyId is required');
             }
 
             // Create reply
             const reply = this.repliesRepository.create({
-                commentId: parseInt(commentId),
+                commentId: parseInt(actualCommentId),
+                parentReplyId: parentReplyId ? parseInt(parentReplyId) : null,
                 userId: parseInt(userId),
                 content: content.trim(),
+                depth: depth,
                 status: 'active'
             });
 
             const savedReply = await this.repliesRepository.save(reply);
 
-            // Update reply count on comment
-            await this.updateReplyCount(commentId);
+            // Update reply count on the parent (either comment or parent reply)
+            if (parentReplyId) {
+                await this.updateNestedReplyCount(parentReplyId);
+            } else {
+                await this.updateReplyCount(actualCommentId);
+            }
 
             return savedReply;
         } catch (error) {
@@ -485,34 +495,39 @@ class CommentsService {
         }
     }
 
-    // Helper method to update comment count
+    // Helper method to update comment count (including replies)
     async updateCommentCount(commentable_type, commentable_id) {
         try {
-            const count = await this.commentsRepository.count({
-                where: {
-                    commentable_type,
-                    commentable_id: parseInt(commentable_id),
-                    status: 'active'
-                }
-            });
+            // Count both direct comments and all replies to those comments
+            const countQuery = `
+                SELECT 
+                    (SELECT COUNT(*) FROM comments WHERE commentable_type = $1 AND commentable_id = $2 AND status = 'active') +
+                    (SELECT COUNT(*) FROM replies r 
+                     JOIN comments c ON r.commentId = c.id 
+                     WHERE c.commentable_type = $1 AND c.commentable_id = $2 AND r.status = 'active') as total_count
+            `;
+
+            const result = await this.dataSource.query(countQuery, [commentable_type, commentable_id]);
+            const totalCount = parseInt(result[0].total_count) || 0;
 
             if (commentable_type === 'gallery') {
-                await this.galleryRepository.update(commentable_id, { comment_count: count });
+                await this.galleryRepository.update(commentable_id, { comment_count: totalCount });
             } else if (commentable_type === 'blog') {
-                await this.blogRepository.update(commentable_id, { comment_count: count });
+                await this.blogRepository.update(commentable_id, { comment_count: totalCount });
             }
         } catch (error) {
             console.error('Update comment count error:', error);
         }
     }
 
-    // Helper method to update reply count
+    // Helper method to update reply count on comment (direct replies only)
     async updateReplyCount(commentId) {
         try {
             const count = await this.repliesRepository.count({
                 where: {
                     commentId: parseInt(commentId),
-                    status: 'active'
+                    status: 'active',
+                    parentReplyId: null // Only count direct replies to the comment
                 }
             });
 
@@ -544,6 +559,74 @@ class CommentsService {
         } catch (error) {
             console.error('Update like count error:', error);
         }
+    }
+
+    // Helper method to update nested reply count
+    async updateNestedReplyCount(parentReplyId) {
+        try {
+            const count = await this.repliesRepository.count({
+                where: {
+                    parentReplyId: parseInt(parentReplyId),
+                    status: 'active'
+                }
+            });
+
+            await this.repliesRepository.update(parentReplyId, { reply_count: count });
+        } catch (error) {
+            console.error('Update nested reply count error:', error);
+        }
+    }
+
+    // Helper method to recursively fetch nested replies with proper like status
+    async getNestedReplies(parentReplyId, maxDepth, userId = null) {
+        if (maxDepth <= 0) {
+            return [];
+        }
+
+        const queryBuilder = this.repliesRepository.createQueryBuilder('reply');
+
+        queryBuilder.leftJoin('reply.user', 'user');
+        queryBuilder.addSelect([
+            'user.id',
+            'user.name',
+            'user.email',
+            'user.profilePhoto'
+        ]);
+
+        // Include like status if user is authenticated
+        if (userId) {
+            queryBuilder.leftJoin(
+                'Likes',
+                'replyUserLike',
+                'replyUserLike.likeable_type = :replyLikeableType AND replyUserLike.likeable_id = reply.id AND replyUserLike.userId = :currentUserId',
+                { replyLikeableType: 'reply', currentUserId: parseInt(userId) }
+            );
+            queryBuilder.addSelect('CASE WHEN replyUserLike.id IS NOT NULL THEN true ELSE false END', 'replyIsLiked');
+        }
+
+        queryBuilder.where('reply.parentReplyId = :parentReplyId', { parentReplyId });
+        queryBuilder.andWhere('reply.status = :status', { status: 'active' });
+        queryBuilder.orderBy('reply.createdAt', 'ASC');
+
+        const result = await queryBuilder.getRawAndEntities();
+
+        // Recursively fetch nested replies for each reply
+        const processedReplies = [];
+
+        for (let i = 0; i < result.entities.length; i++) {
+            const reply = result.entities[i];
+            const rawResult = result.raw[i];
+
+            const processedReply = {
+                ...reply,
+                isLikedByCurrentUser: userId ? (rawResult.replyIsLiked === true || rawResult.replyIsLiked === 'true') : false,
+                childReplies: await this.getNestedReplies(reply.id, maxDepth - 1, userId)
+            };
+
+            processedReplies.push(processedReply);
+        }
+
+        return processedReplies;
     }
 }
 

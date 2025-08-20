@@ -38,6 +38,14 @@ export const Likes = new EntitySchema({
                 referencedColumnName: 'id'
             },
             onDelete: 'CASCADE'
+        },
+        gallery: {
+            type: 'many-to-one',
+            target: 'Gallery',
+            joinColumn: [
+                { name: 'likeable_id', referencedColumnName: 'id' }
+            ],
+            createForeignKeyConstraints: false // Since we use polymorphic relations
         }
     },
     indices: [

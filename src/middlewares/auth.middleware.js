@@ -47,7 +47,7 @@ export const authMiddleware = (req, res, next) => {
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        console.log("🚀 ~ authMiddleware ~ decoded:", decoded)
+        // console.log("🚀 ~ authMiddleware ~ decoded:", decoded)
         req.user = decoded;
         req.token = token; // Store token for potential blacklisting
 
@@ -63,4 +63,27 @@ export const authMiddleware = (req, res, next) => {
             error: 'Invalid or expired token'
         });
     }
+};
+
+// New optional auth middleware that doesn't require authentication
+export const optionalAuthMiddleware = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+
+        // Check if token is blacklisted
+        if (!tokenBlacklist.isBlacklisted(token)) {
+            try {
+                const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                req.user = decoded;
+                req.token = token;
+            } catch (error) {
+                // Token is invalid, but we don't throw error - just continue without user
+                console.log('Optional auth: Invalid token, continuing without user');
+            }
+        }
+    }
+
+    next();
 };

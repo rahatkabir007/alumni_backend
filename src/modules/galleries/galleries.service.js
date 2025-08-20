@@ -48,17 +48,6 @@ class GalleriesService {
                 'user.profilePhoto'
             ]);
 
-            // If user is authenticated, include like status
-            if (userId) {
-                queryBuilder.leftJoin(
-                    'gallery.likes',
-                    'userLike',
-                    'userLike.likeable_type = :likeableType AND userLike.likeable_id = gallery.id AND userLike.userId = :userId',
-                    { likeableType: 'gallery', userId: parseInt(userId) }
-                );
-                queryBuilder.addSelect('userLike.id as userLikeId');
-            }
-
             // Apply filters
             if (validated.status) {
                 queryBuilder.andWhere('gallery.status = :status', { status: validated.status });
@@ -69,7 +58,7 @@ class GalleriesService {
             }
 
             if (validated.userId) {
-                queryBuilder.andWhere('gallery.userId = :userId', { userId: validated.userId });
+                queryBuilder.andWhere('gallery.userId = :filterUserId', { filterUserId: validated.userId });
             }
 
             // Apply sorting
@@ -83,10 +72,29 @@ class GalleriesService {
 
             const galleries = await queryBuilder.getMany();
 
-            // Post-process to add like status for authenticated users
+            // If user is authenticated, batch check like status for all galleries
+            let galleryLikes = new Map();
+            if (userId && galleries.length > 0) {
+                const galleryIds = galleries.map(g => g.id);
+                const likeRecords = await this.dataSource
+                    .getRepository('Likes')
+                    .createQueryBuilder('like')
+                    .select(['like.likeable_id'])
+                    .where('like.userId = :userId', { userId: parseInt(userId) })
+                    .andWhere('like.likeable_type = :type', { type: 'gallery' })
+                    .andWhere('like.likeable_id IN (:...galleryIds)', { galleryIds })
+                    .getMany();
+
+                // Create a map for O(1) lookup
+                likeRecords.forEach(like => {
+                    galleryLikes.set(like.likeable_id, true);
+                });
+            }
+
+            // Add like status to each gallery
             const processedGalleries = galleries.map(gallery => ({
                 ...gallery,
-                isLikedByCurrentUser: userId ? !!gallery.userLikeId : false
+                isLikedByCurrentUser: userId ? galleryLikes.has(gallery.id) : false
             }));
 
             // Calculate pagination metadata
@@ -111,7 +119,7 @@ class GalleriesService {
 
     async getGalleryById(id, includeDetails = false, userId = null) {
         try {
-            // Fix: Handle both string and number types for gallery ID
+            // Handle both string and number types for gallery ID
             let galleryId;
             if (typeof id === 'string') {
                 galleryId = parseInt(id);
@@ -125,112 +133,76 @@ class GalleriesService {
                 throw new Error('Invalid gallery ID');
             }
 
-            const queryBuilder = this.galleryRepository.createQueryBuilder('gallery');
-
-            // Use leftJoin and manually select specific user fields only
-            queryBuilder.leftJoin('gallery.user', 'user');
-            queryBuilder.addSelect([
-                'user.id',
-                'user.name',
-                'user.email',
-                'user.profilePhoto'
-            ]);
-
-            // If user is authenticated, include like status for gallery
-            if (userId) {
-                queryBuilder.leftJoin(
-                    'gallery.likes',
-                    'userLike',
-                    'userLike.likeable_type = :likeableType AND userLike.likeable_id = gallery.id AND userLike.userId = :userId',
-                    { likeableType: 'gallery', userId: parseInt(userId) }
-                );
-                queryBuilder.addSelect('userLike.id as userLikeId');
-            }
-
-            // Include additional details if requested
-            if (includeDetails) {
-                // Include comments with specific user info only
-                queryBuilder.leftJoin('gallery.comments', 'comments', 'comments.status = :commentStatus', { commentStatus: 'active' });
-                queryBuilder.leftJoin('comments.user', 'commentUser');
-                queryBuilder.addSelect([
-                    'comments.id',
-                    'comments.content',
-                    'comments.like_count',
-                    'comments.reply_count',
-                    'comments.createdAt',
-                    'comments.updatedAt',
-                    'commentUser.id',
-                    'commentUser.name',
-                    'commentUser.email',
-                    'commentUser.profilePhoto'
-                ]);
-
-                // Include like status for comments if user is authenticated
-                if (userId) {
-                    queryBuilder.leftJoin(
-                        'comments.likes',
-                        'commentUserLike',
-                        'commentUserLike.likeable_type = :commentLikeableType AND commentUserLike.likeable_id = comments.id AND commentUserLike.userId = :userId',
-                        { commentLikeableType: 'comment' }
-                    );
-                    queryBuilder.addSelect('commentUserLike.id as commentUserLikeId');
+            // Get the gallery with user info
+            const gallery = await this.galleryRepository.findOne({
+                where: { id: galleryId },
+                relations: ['user'],
+                select: {
+                    id: true,
+                    userId: true,
+                    title: true,
+                    description: true,
+                    year: true,
+                    like_count: true,
+                    comment_count: true,
+                    image: true,
+                    status: true,
+                    createdAt: true,
+                    updatedAt: true,
+                    user: {
+                        id: true,
+                        name: true,
+                        email: true,
+                        profilePhoto: true
+                    }
                 }
-
-                // Include replies to comments with specific user info only
-                queryBuilder.leftJoin('comments.replies', 'replies', 'replies.status = :replyStatus', { replyStatus: 'active' });
-                queryBuilder.leftJoin('replies.user', 'replyUser');
-                queryBuilder.addSelect([
-                    'replies.id',
-                    'replies.content',
-                    'replies.like_count',
-                    'replies.createdAt',
-                    'replies.updatedAt',
-                    'replyUser.id',
-                    'replyUser.name',
-                    'replyUser.email',
-                    'replyUser.profilePhoto'
-                ]);
-
-                // Include like status for replies if user is authenticated
-                if (userId) {
-                    queryBuilder.leftJoin(
-                        'replies.likes',
-                        'replyUserLike',
-                        'replyUserLike.likeable_type = :replyLikeableType AND replyUserLike.likeable_id = replies.id AND replyUserLike.userId = :userId',
-                        { replyLikeableType: 'reply' }
-                    );
-                    queryBuilder.addSelect('replyUserLike.id as replyUserLikeId');
-                }
-
-                // Order comments and replies by creation date
-                queryBuilder.addOrderBy('comments.createdAt', 'ASC');
-                queryBuilder.addOrderBy('replies.createdAt', 'ASC');
-            }
-
-            queryBuilder.where('gallery.id = :id', { id: galleryId });
-
-            const gallery = await queryBuilder.getOne();
+            });
 
             if (!gallery) {
                 return null;
             }
 
-            // Post-process to add like status
+            // Check if current user liked this gallery
+            let isLikedByCurrentUser = false;
+            if (userId) {
+                const like = await this.dataSource
+                    .getRepository('Likes')
+                    .findOne({
+                        where: {
+                            userId: parseInt(userId),
+                            likeable_type: 'gallery',
+                            likeable_id: galleryId
+                        }
+                    });
+                isLikedByCurrentUser = !!like;
+            }
+
+            // Calculate total comment count including replies
+            const commentCountQuery = `
+                SELECT 
+                    (SELECT COUNT(*) FROM comments WHERE commentable_type = 'gallery' AND commentable_id = $1 AND status = 'active') +
+                    (SELECT COUNT(*) FROM replies r 
+                     JOIN comments c ON r.commentId = c.id 
+                     WHERE c.commentable_type = 'gallery' AND c.commentable_id = $1 AND r.status = 'active') as total_count
+            `;
+            const commentCountResult = await this.dataSource.query(commentCountQuery, [galleryId]);
+            const totalCommentCount = parseInt(commentCountResult[0].total_count) || 0;
+
             const processedGallery = {
                 ...gallery,
-                isLikedByCurrentUser: userId ? !!gallery.userLikeId : false
+                comment_count: totalCommentCount,
+                isLikedByCurrentUser
             };
 
-            // Process comments and replies for like status
-            if (includeDetails && processedGallery.comments) {
-                processedGallery.comments = processedGallery.comments.map(comment => ({
-                    ...comment,
-                    isLikedByCurrentUser: userId ? !!comment.commentUserLikeId : false,
-                    replies: comment.replies ? comment.replies.map(reply => ({
-                        ...reply,
-                        isLikedByCurrentUser: userId ? !!reply.replyUserLikeId : false
-                    })) : []
-                }));
+            // Include detailed comments if requested
+            if (includeDetails) {
+                const commentsService = new (await import('../comments/comments.service.js')).CommentsService();
+                const commentsResult = await commentsService.getComments('gallery', galleryId, {
+                    includeReplies: true,
+                    maxDepth: 5
+                }, userId);
+
+                processedGallery.comments = commentsResult.comments || [];
             }
 
             return processedGallery;

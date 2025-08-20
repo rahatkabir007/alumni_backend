@@ -1,8 +1,9 @@
-import { authMiddleware } from "../../middlewares/auth.middleware.js";
+import { authMiddleware, optionalAuthMiddleware } from "../../middlewares/auth.middleware.js";
 import { requireAdminOrModerator } from "../../middlewares/role.middleware.js";
 import { ResponseHandler } from "../../utils/responseHandler.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { GalleriesService } from "./galleries.service.js";
+import { CommentsService } from "../comments/comments.service.js";
 
 class GalleriesController {
     /**
@@ -10,13 +11,15 @@ class GalleriesController {
      */
     constructor(galleriesService) {
         this.galleriesService = galleriesService;
+        this.commentsService = new CommentsService();
     }
 
     registerRoutes(app) {
 
-        // Get all galleries (public - with optional filters)
-        app.get('/gallery', asyncHandler(async (req, res) => {
-            const userId = req.user?.id; // Get user ID if authenticated
+        // Get all galleries (public - with optional auth for like status)
+        app.get('/gallery', optionalAuthMiddleware, asyncHandler(async (req, res) => {
+            // Get userId from auth or query parameter
+            const userId = req.user?.id || req.query.userId || null;
             const result = await this.galleriesService.getAllGalleries(req.query, userId);
             return ResponseHandler.success(res, result, 'Galleries retrieved successfully');
         }));
@@ -54,17 +57,19 @@ class GalleriesController {
         }));
 
 
-        // Get galleries by user ID (public)
-        app.get('/gallery/user/:userId', asyncHandler(async (req, res) => {
-            const currentUserId = req.user?.id; // Get current user ID if authenticated
+        // Get galleries by user ID (public - with optional auth for like status)
+        app.get('/gallery/user/:userId', optionalAuthMiddleware, asyncHandler(async (req, res) => {
+            // Get current user ID from auth or query parameter
+            const currentUserId = req.user?.id || req.query.currentUserId || null;
             const result = await this.galleriesService.getUserGalleries(req.params.userId, req.query, currentUserId);
             return ResponseHandler.success(res, result, 'User galleries retrieved successfully');
         }));
 
-        // Get gallery by ID with optional details (public)
-        app.get('/gallery/:id', asyncHandler(async (req, res) => {
+        // Get gallery by ID with optional details (public - with optional auth for like status)
+        app.get('/gallery/:id', optionalAuthMiddleware, asyncHandler(async (req, res) => {
             const includeDetails = req.query.includeDetails === 'true';
-            const userId = req.user?.id; // Get user ID if authenticated
+            // Get userId from auth or query parameter
+            const userId = req.user?.id || req.query.userId || null;
             const result = await this.galleriesService.getGalleryById(req.params.id, includeDetails, userId);
 
             if (!result) {
@@ -130,6 +135,29 @@ class GalleriesController {
             return ResponseHandler.success(res, null, 'Gallery deleted successfully');
         }));
 
+
+        // Toggle like on gallery (authenticated)
+        app.post('/gallery/:id/like', authMiddleware, asyncHandler(async (req, res) => {
+            const userId = req.user.id;
+            const galleryId = req.params.id;
+
+            const likeData = {
+                likeable_type: 'gallery',
+                likeable_id: galleryId
+            };
+
+            const result = await this.commentsService.toggleLike(likeData, userId);
+            return ResponseHandler.success(res, result, `Gallery ${result.action} successfully`);
+        }));
+
+        // Get like status for gallery (public - with optional auth)
+        app.get('/gallery/:id/like-status', optionalAuthMiddleware, asyncHandler(async (req, res) => {
+            const galleryId = req.params.id;
+            const userId = req.user?.id || req.query.userId || null;
+
+            const result = await this.commentsService.getLikeStatus('gallery', galleryId, userId);
+            return ResponseHandler.success(res, result, 'Gallery like status retrieved successfully');
+        }));
 
     }
 }
