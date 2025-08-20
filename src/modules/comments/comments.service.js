@@ -100,15 +100,30 @@ class CommentsService {
 
             const queryBuilder = this.commentsRepository.createQueryBuilder('comment');
 
-            // Include user information
-            queryBuilder.leftJoinAndSelect('comment.user', 'user');
-            queryBuilder.addSelect(['user.id', 'user.name', 'user.email', 'user.profilePhoto']);
+            // Use leftJoin and manually select specific user fields only
+            queryBuilder.leftJoin('comment.user', 'user');
+            queryBuilder.addSelect([
+                'user.id',
+                'user.name',
+                'user.email',
+                'user.profilePhoto'
+            ]);
 
-            // Include replies if requested
+            // Include replies if requested with specific user info only
             if (includeReplies) {
-                queryBuilder.leftJoinAndSelect('comment.replies', 'replies', 'replies.status = :replyStatus', { replyStatus: 'active' });
-                queryBuilder.leftJoinAndSelect('replies.user', 'replyUser');
-                queryBuilder.addSelect(['replyUser.id', 'replyUser.name', 'replyUser.profilePhoto']);
+                queryBuilder.leftJoin('comment.replies', 'replies', 'replies.status = :replyStatus', { replyStatus: 'active' });
+                queryBuilder.leftJoin('replies.user', 'replyUser');
+                queryBuilder.addSelect([
+                    'replies.id',
+                    'replies.content',
+                    'replies.like_count',
+                    'replies.createdAt',
+                    'replies.updatedAt',
+                    'replyUser.id',
+                    'replyUser.name',
+                    'replyUser.email',
+                    'replyUser.profilePhoto'
+                ]);
             }
 
             // Filter by entity

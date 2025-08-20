@@ -39,11 +39,14 @@ class GalleriesService {
             // Build query
             const queryBuilder = this.galleryRepository.createQueryBuilder('gallery');
 
-            // Include user data if requested
-            // if (validated.includeUser) {
-            queryBuilder.leftJoinAndSelect('gallery.user', 'user');
-            queryBuilder.addSelect(['user.id', 'user.name', 'user.email', 'user.profilePhoto']);
-
+            // Use leftJoin and manually select specific user fields only
+            queryBuilder.leftJoin('gallery.user', 'user');
+            queryBuilder.addSelect([
+                'user.id',
+                'user.name',
+                'user.email',
+                'user.profilePhoto'
+            ]);
 
             // Apply filters
             if (validated.status) {
@@ -107,21 +110,47 @@ class GalleriesService {
 
             const queryBuilder = this.galleryRepository.createQueryBuilder('gallery');
 
-            // Always include user information
-            queryBuilder.leftJoinAndSelect('gallery.user', 'user');
-            queryBuilder.addSelect(['user.id', 'user.name', 'user.email', 'user.profilePhoto']);
+            // Use leftJoin and manually select specific user fields only
+            queryBuilder.leftJoin('gallery.user', 'user');
+            queryBuilder.addSelect([
+                'user.id',
+                'user.name',
+                'user.email',
+                'user.profilePhoto'
+            ]);
 
             // Include additional details if requested
             if (includeDetails) {
-                // Include comments with user info
-                queryBuilder.leftJoinAndSelect('gallery.comments', 'comments', 'comments.status = :commentStatus', { commentStatus: 'active' });
-                queryBuilder.leftJoinAndSelect('comments.user', 'commentUser');
-                queryBuilder.addSelect(['commentUser.id', 'commentUser.name', 'commentUser.profilePhoto']);
+                // Include comments with specific user info only
+                queryBuilder.leftJoin('gallery.comments', 'comments', 'comments.status = :commentStatus', { commentStatus: 'active' });
+                queryBuilder.leftJoin('comments.user', 'commentUser');
+                queryBuilder.addSelect([
+                    'comments.id',
+                    'comments.content',
+                    'comments.like_count',
+                    'comments.reply_count',
+                    'comments.createdAt',
+                    'comments.updatedAt',
+                    'commentUser.id',
+                    'commentUser.name',
+                    'commentUser.email',
+                    'commentUser.profilePhoto'
+                ]);
 
-                // Include replies to comments
-                queryBuilder.leftJoinAndSelect('comments.replies', 'replies', 'replies.status = :replyStatus', { replyStatus: 'active' });
-                queryBuilder.leftJoinAndSelect('replies.user', 'replyUser');
-                queryBuilder.addSelect(['replyUser.id', 'replyUser.name', 'replyUser.profilePhoto']);
+                // Include replies to comments with specific user info only
+                queryBuilder.leftJoin('comments.replies', 'replies', 'replies.status = :replyStatus', { replyStatus: 'active' });
+                queryBuilder.leftJoin('replies.user', 'replyUser');
+                queryBuilder.addSelect([
+                    'replies.id',
+                    'replies.content',
+                    'replies.like_count',
+                    'replies.createdAt',
+                    'replies.updatedAt',
+                    'replyUser.id',
+                    'replyUser.name',
+                    'replyUser.email',
+                    'replyUser.profilePhoto'
+                ]);
 
                 // Order comments and replies by creation date
                 queryBuilder.addOrderBy('comments.createdAt', 'ASC');
