@@ -77,7 +77,7 @@ class CommentsService {
         }
     }
 
-    // Get comments for a specific entity
+    // Get comments for a specific entity with proper like status
     async getComments(commentable_type, commentable_id, queryParams = {}, userId = null) {
         try {
             const {
@@ -149,9 +149,9 @@ class CommentsService {
                     replies: []
                 };
 
-                // Fetch nested replies if requested
+                // Fetch direct replies (parentReplyId IS NULL) if requested
                 if (includeReplies) {
-                    processedComment.replies = await this.getNestedReplies(comment.id, maxDepth, userId);
+                    processedComment.replies = await this.getDirectReplies(comment.id, maxDepth, userId);
                 }
 
                 processedComments.push(processedComment);
@@ -175,6 +175,60 @@ class CommentsService {
             console.error('Get comments error:', error);
             throw error;
         }
+    }
+
+    // New method to get direct replies to a comment (where parentReplyId IS NULL)
+    async getDirectReplies(commentId, maxDepth, userId = null) {
+        if (maxDepth <= 0) {
+            return [];
+        }
+
+        const queryBuilder = this.repliesRepository.createQueryBuilder('reply');
+
+        queryBuilder.leftJoin('reply.user', 'user');
+        queryBuilder.addSelect([
+            'user.id',
+            'user.name',
+            'user.email',
+            'user.profilePhoto'
+        ]);
+
+        // Include like status if user is authenticated
+        if (userId) {
+            queryBuilder.leftJoin(
+                'Likes',
+                'replyUserLike',
+                'replyUserLike.likeable_type = :replyLikeableType AND replyUserLike.likeable_id = reply.id AND replyUserLike.userId = :currentUserId',
+                { replyLikeableType: 'reply', currentUserId: parseInt(userId) }
+            );
+            queryBuilder.addSelect('CASE WHEN replyUserLike.id IS NOT NULL THEN true ELSE false END', 'replyIsLiked');
+        }
+
+        // Get direct replies to the comment (parentReplyId IS NULL)
+        queryBuilder.where('reply.commentId = :commentId', { commentId });
+        queryBuilder.andWhere('reply.parentReplyId IS NULL'); // Only direct replies
+        queryBuilder.andWhere('reply.status = :status', { status: 'active' });
+        queryBuilder.orderBy('reply.createdAt', 'ASC');
+
+        const result = await queryBuilder.getRawAndEntities();
+
+        // Process replies and get their nested replies
+        const processedReplies = [];
+
+        for (let i = 0; i < result.entities.length; i++) {
+            const reply = result.entities[i];
+            const rawResult = result.raw[i];
+
+            const processedReply = {
+                ...reply,
+                isLikedByCurrentUser: userId ? (rawResult.replyIsLiked === true || rawResult.replyIsLiked === 'true') : false,
+                childReplies: await this.getNestedReplies(reply.id, maxDepth - 1, userId)
+            };
+
+            processedReplies.push(processedReply);
+        }
+
+        return processedReplies;
     }
 
     // Update a comment
