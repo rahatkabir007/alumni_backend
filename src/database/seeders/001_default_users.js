@@ -94,7 +94,7 @@ export const seed = async (dataSource) => {
             });
 
             await userRepository.save(user);
-            console.log(`✅ Created user: ${userData.email} with roles: ${userData.roles.join(', ')}`);
+            // console.log(`✅ Created user: ${userData.email} with roles: ${userData.roles.join(', ')}`);
             createdCount++;
 
         } catch (error) {
