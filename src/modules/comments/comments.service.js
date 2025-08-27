@@ -4,6 +4,7 @@ import { Replies } from "../../entities/Replies.js";
 import { Likes } from "../../entities/Likes.js";
 import { Gallery } from "../../entities/Gallery.js";
 import { Blog } from "../../entities/Blog.js";
+import { Post } from "../../entities/Post.js";
 import { CommentsValidator } from "../../validations/commentsValidation.js";
 
 class CommentsService {
@@ -14,6 +15,7 @@ class CommentsService {
         this.likesRepository = this.dataSource.getRepository(Likes);
         this.galleryRepository = this.dataSource.getRepository(Gallery);
         this.blogRepository = this.dataSource.getRepository(Blog);
+        this.postRepository = this.dataSource.getRepository(Post);
     }
 
     async createComment(commentData, userId) {
@@ -90,12 +92,12 @@ class CommentsService {
 
         // Update counts
         if (parentReplyId) {
-            await this.updateReplyCount(parentReplyId);
+            await this.updateNestedReplyCount(parentReplyId);
         } else {
             await this.updateReplyCount(actualCommentId);
         }
 
-        // Update total comment count on gallery/blog
+        // Update total comment count on gallery/blog/post
         const comment = await this.commentsRepository.findOne({ where: { id: actualCommentId } });
         if (comment) {
             await this.updateCommentCount(comment.commentable_type, comment.commentable_id);
@@ -254,7 +256,7 @@ class CommentsService {
         } else if (type === 'blog') {
             repository = this.blogRepository;
         } else if (type === 'post') {
-            repository = this.dataSource.getRepository('Post');
+            repository = this.postRepository;
         } else {
             throw new Error(`Invalid commentable type: ${type}`);
         }
@@ -262,6 +264,22 @@ class CommentsService {
         const exists = await repository.findOne({ where: { id } });
         if (!exists) {
             throw new Error(`${type} not found`);
+        }
+    }
+
+    async checkLikeStatus(userId, type, id) {
+        try {
+            const like = await this.likesRepository.findOne({
+                where: {
+                    userId: parseInt(userId),
+                    likeable_type: type,
+                    likeable_id: parseInt(id)
+                }
+            });
+            return !!like;
+        } catch (error) {
+            console.error('Check like status error:', error);
+            return false;
         }
     }
 
@@ -290,14 +308,44 @@ class CommentsService {
             } else if (commentable_type === 'blog') {
                 await this.blogRepository.update(parseInt(commentable_id), { comment_count: totalCount });
             } else if (commentable_type === 'post') {
-                const postRepository = this.dataSource.getRepository('Post');
-                await postRepository.update(parseInt(commentable_id), { comment_count: totalCount });
+                await this.postRepository.update(parseInt(commentable_id), { comment_count: totalCount });
             }
 
             return totalCount;
         } catch (error) {
             console.error('Update comment count error:', error);
             throw error;
+        }
+    }
+
+    async updateReplyCount(commentId) {
+        try {
+            const count = await this.repliesRepository.count({
+                where: {
+                    commentId: parseInt(commentId),
+                    status: 'active',
+                    parentReplyId: null // Only count direct replies to the comment
+                }
+            });
+
+            await this.commentsRepository.update(parseInt(commentId), { reply_count: count });
+        } catch (error) {
+            console.error('Update reply count error:', error);
+        }
+    }
+
+    async updateNestedReplyCount(parentReplyId) {
+        try {
+            const count = await this.repliesRepository.count({
+                where: {
+                    parentReplyId: parseInt(parentReplyId),
+                    status: 'active'
+                }
+            });
+
+            await this.repliesRepository.update(parseInt(parentReplyId), { reply_count: count });
+        } catch (error) {
+            console.error('Update nested reply count error:', error);
         }
     }
 
@@ -319,27 +367,10 @@ class CommentsService {
             } else if (likeable_type === 'reply') {
                 await this.repliesRepository.update(parseInt(likeable_id), { like_count: count });
             } else if (likeable_type === 'post') {
-                const postRepository = this.dataSource.getRepository('Post');
-                await postRepository.update(parseInt(likeable_id), { like_count: count });
+                await this.postRepository.update(parseInt(likeable_id), { like_count: count });
             }
         } catch (error) {
             console.error('Update like count error:', error);
-        }
-    }
-
-    // Helper method to update nested reply count
-    async updateNestedReplyCount(parentReplyId) {
-        try {
-            const count = await this.repliesRepository.count({
-                where: {
-                    parentReplyId: parseInt(parentReplyId),
-                    status: 'active'
-                }
-            });
-
-            await this.repliesRepository.update(parseInt(parentReplyId), { reply_count: count });
-        } catch (error) {
-            console.error('Update nested reply count error:', error);
         }
     }
 
@@ -494,7 +525,7 @@ class CommentsService {
                 await this.updateReplyCount(reply.commentId);
             }
 
-            // Update total comment count on the target entity (gallery/blog)
+            // Update total comment count on the target entity (gallery/blog/post)
             const comment = await this.commentsRepository.findOne({
                 where: { id: reply.commentId }
             });
