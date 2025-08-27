@@ -33,7 +33,7 @@ export class CommentsValidator {
     }
 
     static validateCommentableType(type) {
-        const validTypes = ['gallery', 'blog'];
+        const validTypes = ['gallery', 'blog', 'post']; // Added 'post'
         if (!validTypes.includes(type)) {
             throw new CommentsValidationError('commentable_type', `Type must be one of: ${validTypes.join(', ')}`);
         }
@@ -49,7 +49,7 @@ export class CommentsValidator {
     }
 
     static validateLikeableType(type) {
-        const validTypes = ['gallery', 'blog', 'comment', 'reply'];
+        const validTypes = ['gallery', 'blog', 'comment', 'reply', 'post']; // Added 'post'
         if (!validTypes.includes(type)) {
             throw new CommentsValidationError('likeable_type', `Type must be one of: ${validTypes.join(', ')}`);
         }

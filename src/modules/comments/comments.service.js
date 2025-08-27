@@ -248,45 +248,23 @@ class CommentsService {
 
     // Helper methods
     async verifyTargetExists(type, id) {
-        const repository = type === 'gallery' ? this.galleryRepository : this.blogRepository;
+        let repository;
+        if (type === 'gallery') {
+            repository = this.galleryRepository;
+        } else if (type === 'blog') {
+            repository = this.blogRepository;
+        } else if (type === 'post') {
+            repository = this.dataSource.getRepository('Post');
+        } else {
+            throw new Error(`Invalid commentable type: ${type}`);
+        }
+
         const exists = await repository.findOne({ where: { id } });
         if (!exists) {
             throw new Error(`${type} not found`);
         }
     }
 
-    async checkLikeStatus(userId, type, id) {
-        const like = await this.likesRepository.findOne({
-            where: { userId: parseInt(userId), likeable_type: type, likeable_id: id }
-        });
-        return !!like;
-    }
-
-    // Helper method to update like count
-    async updateLikeCount(likeable_type, likeable_id) {
-        try {
-            const count = await this.likesRepository.count({
-                where: {
-                    likeable_type,
-                    likeable_id: parseInt(likeable_id)
-                }
-            });
-
-            if (likeable_type === 'gallery') {
-                await this.galleryRepository.update(parseInt(likeable_id), { like_count: count });
-            } else if (likeable_type === 'blog') {
-                await this.blogRepository.update(parseInt(likeable_id), { like_count: count });
-            } else if (likeable_type === 'comment') {
-                await this.commentsRepository.update(parseInt(likeable_id), { like_count: count });
-            } else if (likeable_type === 'reply') {
-                await this.repliesRepository.update(parseInt(likeable_id), { like_count: count });
-            }
-        } catch (error) {
-            console.error('Update like count error:', error);
-        }
-    }
-
-    // Helper method to update comment count (including ALL replies recursively)
     async updateCommentCount(commentable_type, commentable_id) {
         try {
             // Fixed SQL query with correct column name (case-sensitive)
@@ -311,6 +289,9 @@ class CommentsService {
                 await this.galleryRepository.update(parseInt(commentable_id), { comment_count: totalCount });
             } else if (commentable_type === 'blog') {
                 await this.blogRepository.update(parseInt(commentable_id), { comment_count: totalCount });
+            } else if (commentable_type === 'post') {
+                const postRepository = this.dataSource.getRepository('Post');
+                await postRepository.update(parseInt(commentable_id), { comment_count: totalCount });
             }
 
             return totalCount;
@@ -320,20 +301,29 @@ class CommentsService {
         }
     }
 
-    // Helper method to update reply count on comment (direct replies only)
-    async updateReplyCount(commentId) {
+    async updateLikeCount(likeable_type, likeable_id) {
         try {
-            const count = await this.repliesRepository.count({
+            const count = await this.likesRepository.count({
                 where: {
-                    commentId: parseInt(commentId),
-                    status: 'active',
-                    parentReplyId: null // Only count direct replies to the comment
+                    likeable_type,
+                    likeable_id: parseInt(likeable_id)
                 }
             });
 
-            await this.commentsRepository.update(parseInt(commentId), { reply_count: count });
+            if (likeable_type === 'gallery') {
+                await this.galleryRepository.update(parseInt(likeable_id), { like_count: count });
+            } else if (likeable_type === 'blog') {
+                await this.blogRepository.update(parseInt(likeable_id), { like_count: count });
+            } else if (likeable_type === 'comment') {
+                await this.commentsRepository.update(parseInt(likeable_id), { like_count: count });
+            } else if (likeable_type === 'reply') {
+                await this.repliesRepository.update(parseInt(likeable_id), { like_count: count });
+            } else if (likeable_type === 'post') {
+                const postRepository = this.dataSource.getRepository('Post');
+                await postRepository.update(parseInt(likeable_id), { like_count: count });
+            }
         } catch (error) {
-            console.error('Update reply count error:', error);
+            console.error('Update like count error:', error);
         }
     }
 

@@ -7,6 +7,7 @@ import { AppModule } from "./modules/app/app.module.js";
 import { connectDB } from "./config/database.js";
 import { GalleriesModule } from './modules/galleries/galleries.module.js';
 import { CommentsModule } from './modules/comments/comments.module.js';
+import { PostsModule } from './modules/posts/posts.module.js';
 
 // Get current file directory for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -43,6 +44,7 @@ connectDB().then(async () => {
     await AppModule(app);
     GalleriesModule(app); // Add this line
     CommentsModule(app); // Add this line
+    PostsModule(app); // Add this line
 
     app.listen(port, () => {
         console.log(`🚀 Server is running on http://localhost:${port}`);

@@ -1,5 +1,6 @@
 import { UserValidationError } from '../validations/userValidation.js';
 import { GalleryValidationError } from '../validations/galleryValidation.js';
+import { PostValidationError } from '../validations/postValidation.js';
 
 class ResponseHandler {
     static success(res, data = null, message = 'Operation successful', statusCode = 200) {
@@ -29,6 +30,17 @@ class ResponseHandler {
             return res.status(400).json({
                 success: false,
                 error: `Gallery validation failed for ${error.field}: ${error.message}`,
+                message: error.message,
+                field: error.field,
+                ...(isDevelopment && { stack: error.stack })
+            });
+        }
+
+        // Handle PostValidationError specifically
+        if (error instanceof PostValidationError) {
+            return res.status(400).json({
+                success: false,
+                error: `Post validation failed for ${error.field}: ${error.message}`,
                 message: error.message,
                 field: error.field,
                 ...(isDevelopment && { stack: error.stack })
