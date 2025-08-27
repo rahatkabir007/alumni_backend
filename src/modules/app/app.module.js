@@ -11,6 +11,7 @@ import { AuthModule } from "../auth/auth.module.js";
 import { UsersModule } from "../users/users.module.js";
 import { GalleriesModule } from "../galleries/galleries.module.js";
 import { allowedOrigins } from "../../config/allowedOrigins.js";
+import { PostsModule } from "../posts/posts.module.js";
 
 let isDbConnected = false;
 
@@ -98,6 +99,7 @@ const AppModule = async (app) => {
     AuthModule(apiRouter);
     UsersModule(apiRouter);
     GalleriesModule(apiRouter);
+    PostsModule(apiRouter);
 
     // Apply auth middleware to API routes (after auth routes are registered)
     // apiRouter.use(authMiddleware);

@@ -190,44 +190,44 @@ class GalleriesController {
             }, 'Comment counts recalculated for all galleries');
         }));
 
-        // Debug endpoint to check specific gallery comment count
-        app.get('/gallery/:id/debug-comment-count', authMiddleware, requireAdminOrModerator, asyncHandler(async (req, res) => {
-            const galleryId = req.params.id;
-            const commentsService = new (await import('../comments/comments.service.js')).CommentsService();
+        // // Debug endpoint to check specific gallery comment count
+        // app.get('/gallery/:id/debug-comment-count', authMiddleware, requireAdminOrModerator, asyncHandler(async (req, res) => {
+        //     const galleryId = req.params.id;
+        //     const commentsService = new (await import('../comments/comments.service.js')).CommentsService();
 
-            // Get current gallery data
-            const gallery = await this.galleriesService.galleryRepository.findOne({ where: { id: galleryId } });
+        //     // Get current gallery data
+        //     const gallery = await this.galleriesService.galleryRepository.findOne({ where: { id: galleryId } });
 
-            if (!gallery) {
-                return ResponseHandler.notFound(res, 'Gallery not found');
-            }
+        //     if (!gallery) {
+        //         return ResponseHandler.notFound(res, 'Gallery not found');
+        //     }
 
-            // Get actual counts from database
-            const commentsCount = await this.galleriesService.dataSource.query(
-                'SELECT COUNT(*) as count FROM comments WHERE commentable_type = $1 AND commentable_id = $2 AND status = $3',
-                ['gallery', galleryId, 'active']
-            );
+        //     // Get actual counts from database
+        //     const commentsCount = await this.galleriesService.dataSource.query(
+        //         'SELECT COUNT(*) as count FROM comments WHERE commentable_type = $1 AND commentable_id = $2 AND status = $3',
+        //         ['gallery', galleryId, 'active']
+        //     );
 
-            const repliesCount = await this.galleriesService.dataSource.query(
-                'SELECT COUNT(*) as count FROM replies r INNER JOIN comments c ON r.commentId = c.id WHERE c.commentable_type = $1 AND c.commentable_id = $2 AND r.status = $3 AND c.status = $3',
-                ['gallery', galleryId, 'active']
-            );
+        //     const repliesCount = await this.galleriesService.dataSource.query(
+        //         'SELECT COUNT(*) as count FROM replies r INNER JOIN comments c ON r.commentId = c.id WHERE c.commentable_type = $1 AND c.commentable_id = $2 AND r.status = $3 AND c.status = $3',
+        //         ['gallery', galleryId, 'active']
+        //     );
 
-            const actualTotal = parseInt(commentsCount[0].count) + parseInt(repliesCount[0].count);
+        //     const actualTotal = parseInt(commentsCount[0].count) + parseInt(repliesCount[0].count);
 
-            // Force recalculate
-            const recalculatedCount = await commentsService.updateCommentCount('gallery', galleryId);
+        //     // Force recalculate
+        //     const recalculatedCount = await commentsService.updateCommentCount('gallery', galleryId);
 
-            return ResponseHandler.success(res, {
-                galleryId,
-                storedCommentCount: gallery.comment_count,
-                actualCommentsCount: parseInt(commentsCount[0].count),
-                actualRepliesCount: parseInt(repliesCount[0].count),
-                actualTotal,
-                recalculatedCount,
-                isCorrect: gallery.comment_count === actualTotal
-            }, 'Gallery comment count debug info');
-        }));
+        //     return ResponseHandler.success(res, {
+        //         galleryId,
+        //         storedCommentCount: gallery.comment_count,
+        //         actualCommentsCount: parseInt(commentsCount[0].count),
+        //         actualRepliesCount: parseInt(repliesCount[0].count),
+        //         actualTotal,
+        //         recalculatedCount,
+        //         isCorrect: gallery.comment_count === actualTotal
+        //     }, 'Gallery comment count debug info');
+        // }));
 
     }
 }
